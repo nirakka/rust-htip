@@ -23,13 +23,29 @@ pub enum TlvType {
 
 impl TlvType {
     pub fn as_byte(&self) -> u8 {
-        unimplemented!();
+        match self {
+            TlvType::End => 0,
+            TlvType::ChassisID => 1,
+            _ => 0,
+        }
+        //unimplemented!();
     }
 }
 
 impl From<u8> for TlvType {
     fn from(byte: u8) -> Self {
-        unimplemented!();
+        match byte {
+            0u8 => TlvType::End,
+            1u8 => TlvType::ChassisID,
+            2u8 => TlvType::PortID,
+            3u8 => TlvType::TimeToLive,
+            9u8..=126u8 => TlvType::Reserved(byte),
+            127u8 => TlvType::Custom,
+            128u8..=255u8 => TlvType::Invalid(byte),
+
+            _   => TlvType::End,
+
+        }
     }
 }
 
@@ -37,7 +53,8 @@ impl From<u8> for TlvType {
 pub struct TLV;
 
 pub fn parseTLV(input : Vec<u8>) -> Result<TLV, ParsingError> {
-    unimplemented!();
+    match input {
+        unimplemented!();
 }
 
 impl TLV {
