@@ -68,7 +68,7 @@ pub fn parseTLV(input :  Vec<u8>) -> Result<TLV, ParsingError> {
                 let _type = _type.to_digit(10).unwrap() as u8;
                 let tlv = TLV {
                     ttype: _type,
-                    length: 0,
+                    length: input.iter().count()-2,
                     value: vec![]
                 };
                 return Result::Ok(tlv);
@@ -81,25 +81,30 @@ pub fn parseTLV(input :  Vec<u8>) -> Result<TLV, ParsingError> {
             return Result::Ok(
                     TLV{
                         ttype: 1u8,
-                        length: 512,
+                        length: input.iter().count()-2,
                         value: vec![0;512]
                     }
                 );
-            } else { Result::Ok(
-            TLV{
-                ttype: 0u8,
-                length: 512,
-                value: vec![0;512]
-            })
-} 
+            } else { 
+                let val = input.iter().cloned().skip(2).collect::<Vec<u8>>();
+                Result::Ok(
+                    TLV{
+                        ttype: input[0],
+                        length: input.iter().count()-2,
+                        value: val, 
+                    })
+            } 
 
         },
-        _   => Result::Ok(
-            TLV{
-                ttype: 0u8,
-                length: 512,
-                value: vec![]
-            }),
+        _   => {
+                let val = input.iter().cloned().skip(2).collect::<Vec<u8>>();
+                Result::Ok(
+                TLV{
+                    ttype: input[0],
+                    length: input.iter().count()-2,
+                    value: val, 
+                })
+            }
     }
 }
 
