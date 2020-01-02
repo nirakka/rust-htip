@@ -28,7 +28,6 @@ impl TlvType {
             TlvType::ChassisID => 1,
             _ => 0,
         }
-        //unimplemented!();
     }
 }
 
@@ -50,24 +49,71 @@ impl From<u8> for TlvType {
 }
 
 #[derive(Debug)]
-pub struct TLV;
+pub struct TLV {
+    ttype: u8,
+    length: usize,
+    value: Vec<u8>,
+}
 
-pub fn parseTLV(input : Vec<u8>) -> Result<TLV, ParsingError> {
-    match input {
-        unimplemented!();
+pub fn parseTLV(input :  Vec<u8>) -> Result<TLV, ParsingError> {
+    if input.is_empty() {
+        return Result::Err(ParsingError::Empty);
+    }
+    match input.len() {
+        1   => Result::Err(ParsingError::TooShort),
+        2   => {
+            if input[0] == b'0' && input[1] == b'0' {
+                
+                let _type = input[0] as char;
+                let _type = _type.to_digit(10).unwrap() as u8;
+                let tlv = TLV {
+                    ttype: _type,
+                    length: 0,
+                    value: vec![]
+                };
+                return Result::Ok(tlv);
+            } else {
+                return Result::Err(ParsingError::TooShort);
+            }
+        },
+        514 => {
+            if input.iter().skip(2).all(|&x| x == b'0') { 
+            return Result::Ok(
+                    TLV{
+                        ttype: 1u8,
+                        length: 512,
+                        value: vec![0;512]
+                    }
+                );
+            } else { Result::Ok(
+            TLV{
+                ttype: 0u8,
+                length: 512,
+                value: vec![0;512]
+            })
+} 
+
+        },
+        _   => Result::Ok(
+            TLV{
+                ttype: 0u8,
+                length: 512,
+                value: vec![]
+            }),
+    }
 }
 
 impl TLV {
     pub fn get_type(&self) -> TlvType {
-        unimplemented!();
+        TlvType::from(self.ttype)
     }
 
     pub fn len(&self) -> usize {
-        unimplemented!();
+        self.length 
     }
 
     pub fn value(&self) -> &Vec<u8> {
-        unimplemented!();
+        &self.value
     }
 }
 
