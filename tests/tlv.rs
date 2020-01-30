@@ -7,19 +7,25 @@ fn parsing_empty_input_returns_empty_error() {
 }
 
 #[test]
-fn parsing_1_byte_buffer_is_short () {
+fn parsing_1_byte_buffer_is_short() {
     let input = vec![b'1'];
-    assert_eq!(parseTLV(input).expect_err("result is not ParsingError::TooShort"), ParsingError::TooShort);
+    assert_eq!(
+        parseTLV(input).expect_err("result is not ParsingError::TooShort"),
+        ParsingError::TooShort
+    );
 }
 
 #[test]
-fn parsing_2_byte_buffer_with_no_value_is_short () {
+fn parsing_2_byte_buffer_with_no_value_is_short() {
     let input = vec![b'1', b'1'];
-    assert_eq!(parseTLV(input).expect_err("result is not ParsingError::TooShort"), ParsingError::TooShort);
+    assert_eq!(
+        parseTLV(input).expect_err("result is not ParsingError::TooShort"),
+        ParsingError::TooShort
+    );
 }
 
 #[test]
-fn parsing_2_byte_end_of_lldpdu_is_ok () {
+fn parsing_2_byte_end_of_lldpdu_is_ok() {
     let input = vec![b'0', b'0'];
     if let Ok(tlv) = parseTLV(input) {
         assert_eq!(tlv.len(), 0);
@@ -91,4 +97,11 @@ fn tlv_from_byte_range_128_to_255_are_invalid() {
     (128u8..255u8)
         .map(|u| (TlvType::from(u), TlvType::Invalid(u)))
         .for_each(|(u, invalid_u)| assert_eq!(u, invalid_u));
+}
+
+#[test]
+fn tlv_from_and_then_as_bytes_gives_original_u8_range_0_255() {
+    (0u8..255u8)
+        .map(|u| (TlvType::from(u).as_byte(), u))
+        .for_each(|(u, expected_u)| assert_eq!(u, expected_u));
 }
