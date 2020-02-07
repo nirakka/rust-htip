@@ -1,9 +1,12 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParsingError {
     TooShort,
-    TooLong,
+    //this will probably become too short too
     Empty,
+    HtipError,
 }
+
+pub enum HtipError {}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TlvType {
@@ -56,6 +59,24 @@ pub struct TLV {
     value: Vec<u8>,
 }
 
+impl TLV {
+    pub fn tlv_type(&self) -> &TlvType {
+        &self.ttype
+    }
+
+    pub fn len(&self) -> usize {
+        self.length
+    }
+
+    pub fn value(&self) -> &Vec<u8> {
+        &self.value
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
+}
+
 pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
     if input.is_empty() {
         return Result::Err(ParsingError::Empty);
@@ -102,24 +123,6 @@ pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
         }
     }
     result
-}
-
-impl TLV {
-    pub fn get_type(&self) -> &TlvType {
-        &self.ttype
-    }
-
-    pub fn len(&self) -> usize {
-        self.length
-    }
-
-    pub fn value(&self) -> &Vec<u8> {
-        &self.value
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.value.is_empty()
-    }
 }
 
 #[cfg(test)]

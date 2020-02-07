@@ -29,7 +29,7 @@ fn parsing_2_byte_end_of_lldpdu_is_ok() {
     let input = &[b'0', b'0'];
     if let Ok(tlv) = parse_tlv(input) {
         assert_eq!(tlv.len(), 0);
-        assert_eq!(tlv.get_type(), &TlvType::End);
+        assert_eq!(tlv.tlv_type(), &TlvType::End);
         assert_eq!(tlv.value(), &vec![]);
     } else {
         panic!("Parse result should be Ok(), with zero len, and zero value");
@@ -38,12 +38,12 @@ fn parsing_2_byte_end_of_lldpdu_is_ok() {
 
 #[test]
 fn parsing_max_length_tlv_all_zeroes_and_type_is_chassis_id() {
-    let mut input = &mut [b'0'; 514];
+    let input = &mut [b'0'; 514];
     input[0] = 3u8;
     input[1] = 255u8;
     if let Ok(tlv) = parse_tlv(input) {
         assert_eq!(tlv.len(), 512);
-        assert_eq!(tlv.get_type(), &TlvType::ChassisID);
+        assert_eq!(tlv.tlv_type(), &TlvType::ChassisID);
         assert_eq!(*tlv.value(), vec![0u8; 512]);
     } else {
         panic!("Parse result should be Ok(), with 512 len and 512 value");
@@ -104,15 +104,4 @@ fn tlv_from_and_then_as_bytes_gives_original_u8_range_0_255() {
     (0u8..255u8)
         .map(|u| (TlvType::from(u).as_byte(), u))
         .for_each(|(u, expected_u)| assert_eq!(u, expected_u));
-}
-
-#[test]
-fn parse_frame_with_one_tlv() {
-    let frame = &[b'0', b'0'];
-    let result = parse_frame(frame);
-    assert!(result.len() == 1, "result length is not 1");
-    let res_tlv = result[0]
-        .as_ref()
-        .expect("an end tlv should be present here");
-    assert_eq!(res_tlv.get_type(), &TlvType::End);
 }
