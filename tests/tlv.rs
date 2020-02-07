@@ -2,34 +2,34 @@ use rust_htip::*;
 
 #[test]
 fn parsing_empty_input_returns_empty_error() {
-    let input = vec![];
-    assert_eq!(parseTLV(input).err(), Some(ParsingError::Empty));
+    let input = &[];
+    assert_eq!(parse_tlv(input).err(), Some(ParsingError::Empty));
 }
 
 #[test]
 fn parsing_1_byte_buffer_is_short() {
-    let input = vec![b'1'];
+    let input = &[b'1'];
     assert_eq!(
-        parseTLV(input).expect_err("result is not ParsingError::TooShort"),
+        parse_tlv(input).expect_err("result is not ParsingError::TooShort"),
         ParsingError::TooShort
     );
 }
 
 #[test]
 fn parsing_2_byte_buffer_with_no_value_is_short() {
-    let input = vec![b'1', b'1'];
+    let input = &[b'1', b'1'];
     assert_eq!(
-        parseTLV(input).expect_err("result is not ParsingError::TooShort"),
+        parse_tlv(input).expect_err("result is not ParsingError::TooShort"),
         ParsingError::TooShort
     );
 }
 
 #[test]
 fn parsing_2_byte_end_of_lldpdu_is_ok() {
-    let input = vec![b'0', b'0'];
-    if let Ok(tlv) = parseTLV(input) {
+    let input = &[b'0', b'0'];
+    if let Ok(tlv) = parse_tlv(input) {
         assert_eq!(tlv.len(), 0);
-        assert_eq!(tlv.get_type(), TlvType::End);
+        assert_eq!(tlv.get_type(), &TlvType::End);
         assert_eq!(tlv.value(), &vec![]);
     } else {
         panic!("Parse result should be Ok(), with zero len, and zero value");
@@ -38,12 +38,12 @@ fn parsing_2_byte_end_of_lldpdu_is_ok() {
 
 #[test]
 fn parsing_max_length_tlv_all_zeroes_and_type_is_chassis_id() {
-    let mut input = vec![b'0'; 514];
+    let mut input = &mut [b'0'; 514];
     input[0] = 3u8;
     input[1] = 255u8;
-    if let Ok(tlv) = parseTLV(input) {
+    if let Ok(tlv) = parse_tlv(input) {
         assert_eq!(tlv.len(), 512);
-        assert_eq!(tlv.get_type(), TlvType::ChassisID);
+        assert_eq!(tlv.get_type(), &TlvType::ChassisID);
         assert_eq!(*tlv.value(), vec![0u8; 512]);
     } else {
         panic!("Parse result should be Ok(), with 512 len and 512 value");
@@ -104,4 +104,15 @@ fn tlv_from_and_then_as_bytes_gives_original_u8_range_0_255() {
     (0u8..255u8)
         .map(|u| (TlvType::from(u).as_byte(), u))
         .for_each(|(u, expected_u)| assert_eq!(u, expected_u));
+}
+
+#[test]
+fn parse_frame_with_one_tlv() {
+    let frame = &[b'0', b'0'];
+    let result = parse_frame(frame);
+    assert!(result.len() == 1, "result length is not 1");
+    let res_tlv = result[0]
+        .as_ref()
+        .expect("an end tlv should be present here");
+    assert_eq!(res_tlv.get_type(), &TlvType::End);
 }

@@ -42,83 +42,83 @@ impl From<u8> for TlvType {
             127u8 => TlvType::Custom,
             128u8..=255u8 => TlvType::Invalid(byte),
 
-            _   => TlvType::End,
-
+            _ => TlvType::End,
         }
     }
 }
 
 #[derive(Debug)]
 pub struct TLV {
-    ttype: u8,
+    ttype: TlvType,
     length: usize,
+    //to create this value, make sure you copy/clone
+    //the contents of the input slice
     value: Vec<u8>,
 }
 
-pub fn parseTLV(input :  Vec<u8>) -> Result<TLV, ParsingError> {
+pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
     if input.is_empty() {
         return Result::Err(ParsingError::Empty);
     }
-    match input.len() {
-        1   => Result::Err(ParsingError::TooShort),
-        2   => {
-            if input[0] == b'0' && input[1] == b'0' {
-                
-                let _type = input[0] as char;
-                let _type = _type.to_digit(10).unwrap() as u8;
-                let tlv = TLV {
-                    ttype: _type,
-                    length: input.iter().count()-2,
-                    value: vec![]
-                };
-                return Result::Ok(tlv);
-            } else {
-                return Result::Err(ParsingError::TooShort);
-            }
-        },
-        514 => {
-            if input.iter().skip(2).all(|&x| x == b'0') { 
-            return Result::Ok(
-                    TLV{
-                        ttype: 1u8,
-                        length: input.iter().count()-2,
-                        value: vec![0;512]
-                    }
-                );
-            } else { 
-                let val = input.iter().cloned().skip(2).collect::<Vec<u8>>();
-                Result::Ok(
-                    TLV{
-                        ttype: input[0],
-                        length: input.iter().count()-2,
-                        value: val, 
-                    })
-            } 
+    unimplemented!()
 
-        },
-        _   => {
-                let val = input.iter().cloned().skip(2).collect::<Vec<u8>>();
-                Result::Ok(
-                TLV{
-                    ttype: input[0],
-                    length: input.iter().count()-2,
-                    value: val, 
-                })
+    //if input length less than 2
+    //it's a too short error
+    //
+    //compute type
+    //compute length
+    //
+    //if computed length > input length
+    //this is a too short error
+    //
+    //return Ok tlv instance
+    //TLV { length : ...
+    //      type : ....
+    //      //we have to clone the value
+    //      value : ....
+    //      }
+}
+
+pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
+    let mut result = vec![];
+    let mut input = frame;
+
+    while !input.is_empty() {
+        match parse_tlv(input) {
+            Ok(tlv) => {
+                //calculate the new input
+                assert!(tlv.length + 2 <= input.len());
+                input = &input[(tlv.len() + 2)..];
+                //save the tlv on the result vector
+                result.push(Ok(tlv));
             }
+            Err(error) => {
+                //we encountered an error.
+                //push the erroro in the result vector
+                //break out of the parsing loop
+                result.push(Err(error));
+                break;
+            }
+        }
     }
+    result
 }
 
 impl TLV {
-    pub fn get_type(&self) -> TlvType {
-        TlvType::from(self.ttype)
+    pub fn get_type(&self) -> &TlvType {
+        &self.ttype
     }
 
     pub fn len(&self) -> usize {
-        self.length 
+        self.length
     }
 
     pub fn value(&self) -> &Vec<u8> {
         &self.value
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
     }
 }
 
