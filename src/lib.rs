@@ -54,7 +54,7 @@ impl From<u8> for TlvType {
 pub struct TLV {
     ttype: TlvType,
     length: usize,
-    //to create this value, make sure you copy/clone
+    //to create this value, make sure you copy/clone 
     //the contents of the input slice
     value: Vec<u8>,
 }
@@ -81,14 +81,52 @@ pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
     if input.is_empty() {
         return Result::Err(ParsingError::Empty);
     }
-    unimplemented!()
+    //unimplemented!();
 
     //if input length less than 2
     //it's a too short error
+    if input.len() < 2 {
+        return Result::Err(ParsingError::TooShort);
+    }
     //
     //compute type
     //compute length
     //
+
+    let ttype:TlvType;
+    let length:usize;
+    if input[0] == b'0' &&  input[1] == b'0' {
+        let ttype = TlvType::End;
+        let length = 0;
+        Result::Ok(TLV { 
+              ttype : ttype,
+              length : length,
+              //we have to clone the value
+              value :vec![] 
+              }
+              )
+    } else {
+
+        let ttype = TlvType::from(input[0]>>1);
+        let end_of_byte = input[0] & 1u8;
+        if end_of_byte == 0{
+            length = input[1].into();
+        } else {
+            let sec_byte = input[1] as usize; 
+            length = 2usize.pow(8) + sec_byte;
+        }
+
+        if length > input.len() {
+            return Result::Err(ParsingError::TooShort);
+        }
+        Result::Ok(TLV { 
+              ttype : ttype,
+              length : length,
+              //we have to clone the value
+              value :input[2..2+length].to_vec() 
+              }
+              )
+    }
     //if computed length > input length
     //this is a too short error
     //
@@ -98,6 +136,7 @@ pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
     //      //we have to clone the value
     //      value : ....
     //      }
+    
 }
 
 pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
