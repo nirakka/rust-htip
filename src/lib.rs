@@ -27,7 +27,16 @@ impl TlvType {
         match self {
             TlvType::End => 0,
             TlvType::ChassisID => 1,
-            _ => 0,
+            TlvType::PortID => 2,
+            TlvType::TimeToLive => 3,
+            TlvType::PortDescritpion => 4,
+            TlvType::SystemName => 5,
+            TlvType::SystemDescription => 6,
+            TlvType::SystemCapabilities => 7,
+            TlvType::ManagementAddress => 8,
+            TlvType::Reserved(x) => *x,
+            TlvType::Custom => 127,
+            TlvType::Invalid(x) => *x,
         }
     }
 }
@@ -39,11 +48,14 @@ impl From<u8> for TlvType {
             1u8 => TlvType::ChassisID,
             2u8 => TlvType::PortID,
             3u8 => TlvType::TimeToLive,
+            4u8 => TlvType::PortDescritpion,
+            5u8 => TlvType::SystemName,
+            6u8 => TlvType::SystemDescription,
+            7u8 => TlvType::SystemCapabilities,
+            8u8 => TlvType::ManagementAddress,
             9u8..=126u8 => TlvType::Reserved(byte),
             127u8 => TlvType::Custom,
             128u8..=255u8 => TlvType::Invalid(byte),
-
-            _ => TlvType::End,
         }
     }
 }
@@ -93,7 +105,7 @@ pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
 
     Result::Ok(TLV {
         //compute type
-        ttype : TlvType::from(input[0] >> 1),
+        ttype: TlvType::from(input[0] >> 1),
         length,
         //we have to clone the value
         value: input[2..2 + length].to_vec(),
