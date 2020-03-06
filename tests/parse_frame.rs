@@ -2,7 +2,7 @@ use rust_htip::*;
 
 #[test]
 fn parse_frame_with_one_tlv() {
-    let frame = &[b'0', b'0'];
+    let frame = &[0, 0];
     let result = parse_frame(frame);
     assert!(result.len() == 1, "result length is not 1");
     let res_tlv = result[0]
@@ -13,7 +13,7 @@ fn parse_frame_with_one_tlv() {
 
 #[test]
 fn parse_frame_with_two_tlv() {
-    let frame = &[b'2', b'4', b'a', b'b', b'c', b'd', b'0', b'0'];
+    let frame = &[2, 4, b'a', b'b', b'c', b'd', 0, 0];
     let mut result = parse_frame(frame);
     assert_eq!(result.len(), 2);
     //end tlv here
