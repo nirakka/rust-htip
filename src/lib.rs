@@ -81,23 +81,28 @@ pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
     if input.is_empty() {
         return Result::Err(ParsingError::Empty);
     }
-    unimplemented!()
-
     //if input length less than 2
     //it's a too short error
-    //
-    //compute type
+    if input.len() < 2 {
+        return Result::Err(ParsingError::TooShort);
+    }
+
     //compute length
-    //
-    //if computed length > input length
-    //this is a too short error
-    //
-    //return Ok tlv instance
-    //TLV { length : ...
-    //      type : ....
-    //      //we have to clone the value
-    //      value : ....
-    //      }
+    let high_bit = ((input[0] as usize) & 0x1usize) << 8;
+    let length = high_bit + (input[1] as usize);
+
+    //check if lenght is too short
+    if length > input.len() {
+        return Result::Err(ParsingError::TooShort);
+    }
+
+    Result::Ok(TLV {
+        //compute type
+        ttype : TlvType::from(input[0] >> 1),
+        length,
+        //we have to clone the value
+        value: input[2..2 + length].to_vec(),
+    })
 }
 
 pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
