@@ -1,8 +1,6 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParsingError {
     TooShort,
-    //this will probably become too short too
-    Empty,
     HtipError,
 }
 
@@ -78,9 +76,6 @@ impl TLV {
 }
 
 pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
-    if input.is_empty() {
-        return Result::Err(ParsingError::Empty);
-    }
     //if input length less than 2
     //it's a too short error
     if input.len() < 2 {

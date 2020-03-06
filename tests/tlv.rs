@@ -1,11 +1,9 @@
 use rust_htip::*;
 
-
-
 #[test]
-fn parsing_empty_input_returns_empty_error() {
+fn parsing_empty_input_returns_too_short() {
     let input = &[];
-    assert_eq!(parse_tlv(input).err(), Some(ParsingError::Empty));
+    assert_eq!(parse_tlv(input).err(), Some(ParsingError::TooShort));
 }
 
 #[test]
