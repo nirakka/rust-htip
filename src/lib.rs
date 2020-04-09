@@ -1,10 +1,10 @@
-#[derive(Debug, PartialEq, Eq)]
-pub enum ParsingError {
-    TooShort,
-    HtipError,
-}
+mod htip;
 
-pub enum HtipError {}
+#[derive(Debug, PartialEq, Eq)]
+pub enum ParsingError<'a> {
+    TooShort,
+    Htip(htip::HtipError<'a>),
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TlvType {
