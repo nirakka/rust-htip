@@ -1,4 +1,4 @@
-mod htip;
+pub mod htip;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParsingError<'a> {
