@@ -107,35 +107,40 @@ impl Number {
         Number { size, value: 0 }
     }
 
-    fn check_length(expected: usize, actual: usize) -> Result<(), HtipError<'static>> {
-        if actual != expected {
-            Err(HtipError::UnexpectedLength(actual))
-        } else {
-            Ok(())
+    fn check_length(
+        expected: usize,
+        actual: usize,
+        remaining: usize,
+    ) -> Result<(), HtipError<'static>> {
+        match (actual == expected, remaining >= expected) {
+            (true, true) => Ok(()),
+            (true, false) => Err(HtipError::TooShort),
+            (false, _) => Err(HtipError::UnexpectedLength(actual)),
         }
     }
 }
 
 impl Parser for Number {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError> {
-        let len = input.len();
-        match len {
-            0 | 1 => Err(HtipError::TooShort),
-            _ => {
-                let actual_size = input[0] as usize;
-                Number::check_length(self.size as usize, actual_size)?;
-                //we have the size we expect, try to parse
-                //this into a number
-                // note: inclusive range
-                self.value = (1..=actual_size).fold(0u32, |mut acc, index| {
-                    acc <<= 8;
-                    acc += input[index] as u32;
-                    acc
-                });
-                //consume the bytes we used so far
-                Ok(&input[1 + actual_size..])
-            }
+        if input.is_empty() {
+            return Err(HtipError::TooShort);
         }
+
+        //normal processing
+        //consume the length
+        let actual = input[0] as usize;
+        let input = &input[1..];
+        //check actual, expected and remaining buffer lengths
+        Number::check_length(self.size as usize, actual, input.len())?;
+        //we have the size we expect, try to parse
+        //this into a number
+        self.value = (0..actual).fold(0u32, |mut acc, index| {
+            acc <<= 8;
+            acc += input[index] as u32;
+            acc
+        });
+        //consume the bytes we used so far
+        Ok(&input[actual..])
     }
 
     fn data(&self) -> HtipData {
