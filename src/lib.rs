@@ -1,12 +1,10 @@
-#[derive(Debug, PartialEq, Eq)]
-pub enum ParsingError {
-    TooShort,
-    //this will probably become too short too
-    Empty,
-    HtipError,
-}
+pub mod htip;
 
-pub enum HtipError {}
+#[derive(Debug, PartialEq, Eq)]
+pub enum ParsingError<'a> {
+    TooShort,
+    Htip(htip::HtipError<'a>),
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TlvType {
@@ -29,7 +27,16 @@ impl TlvType {
         match self {
             TlvType::End => 0,
             TlvType::ChassisID => 1,
-            _ => 0,
+            TlvType::PortID => 2,
+            TlvType::TimeToLive => 3,
+            TlvType::PortDescritpion => 4,
+            TlvType::SystemName => 5,
+            TlvType::SystemDescription => 6,
+            TlvType::SystemCapabilities => 7,
+            TlvType::ManagementAddress => 8,
+            TlvType::Reserved(x) => *x,
+            TlvType::Custom => 127,
+            TlvType::Invalid(x) => *x,
         }
     }
 }
@@ -41,11 +48,14 @@ impl From<u8> for TlvType {
             1u8 => TlvType::ChassisID,
             2u8 => TlvType::PortID,
             3u8 => TlvType::TimeToLive,
+            4u8 => TlvType::PortDescritpion,
+            5u8 => TlvType::SystemName,
+            6u8 => TlvType::SystemDescription,
+            7u8 => TlvType::SystemCapabilities,
+            8u8 => TlvType::ManagementAddress,
             9u8..=126u8 => TlvType::Reserved(byte),
             127u8 => TlvType::Custom,
             128u8..=255u8 => TlvType::Invalid(byte),
-
-            _ => TlvType::End,
         }
     }
 }
@@ -78,65 +88,28 @@ impl TLV {
 }
 
 pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
-    if input.is_empty() {
-        return Result::Err(ParsingError::Empty);
-    }
-    //unimplemented!();
-
     //if input length less than 2
     //it's a too short error
     if input.len() < 2 {
         return Result::Err(ParsingError::TooShort);
     }
-    //
-    //compute type
+
     //compute length
-    //
+    let high_bit = ((input[0] as usize) & 0x1usize) << 8;
+    let length = high_bit + (input[1] as usize);
 
-    let ttype:TlvType;
-    let length:usize;
-    if input[0] == b'0' &&  input[1] == b'0' {
-        let ttype = TlvType::End;
-        let length = 0;
-        Result::Ok(TLV { 
-              ttype : ttype,
-              length : length,
-              //we have to clone the value
-              value :vec![] 
-              }
-              )
-    } else {
-
-        let ttype = TlvType::from(input[0]>>1);
-        let end_of_byte = input[0] & 1u8;
-        if end_of_byte == 0{
-            length = input[1].into();
-        } else {
-            let sec_byte = input[1] as usize; 
-            length = 2usize.pow(8) + sec_byte;
-        }
-
-        if length > input.len() {
-            return Result::Err(ParsingError::TooShort);
-        }
-        Result::Ok(TLV { 
-              ttype : ttype,
-              length : length,
-              //we have to clone the value
-              value :input[2..2+length].to_vec() 
-              }
-              )
+    //check if lenght is too short
+    if length > input.len() {
+        return Result::Err(ParsingError::TooShort);
     }
-    //if computed length > input length
-    //this is a too short error
-    //
-    //return Ok tlv instance
-    //TLV { length : ...
-    //      type : ....
-    //      //we have to clone the value
-    //      value : ....
-    //      }
-    
+
+    Result::Ok(TLV {
+        //compute type
+        ttype: TlvType::from(input[0] >> 1),
+        length,
+        //we have to clone the value
+        value: input[2..2 + length].to_vec(),
+    })
 }
 
 pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {

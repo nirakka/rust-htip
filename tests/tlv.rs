@@ -1,9 +1,9 @@
 use rust_htip::*;
 
 #[test]
-fn parsing_empty_input_returns_empty_error() {
+fn parsing_empty_input_returns_too_short() {
     let input = &[];
-    assert_eq!(parse_tlv(input).err(), Some(ParsingError::Empty));
+    assert_eq!(parse_tlv(input).err(), Some(ParsingError::TooShort));
 }
 
 #[test]
@@ -17,7 +17,7 @@ fn parsing_1_byte_buffer_is_short() {
 
 #[test]
 fn parsing_2_byte_buffer_with_no_value_is_short() {
-    let input = &[b'1', b'1'];
+    let input = &[1, 1];
     assert_eq!(
         parse_tlv(input).expect_err("result is not ParsingError::TooShort"),
         ParsingError::TooShort
@@ -26,7 +26,7 @@ fn parsing_2_byte_buffer_with_no_value_is_short() {
 
 #[test]
 fn parsing_2_byte_end_of_lldpdu_is_ok() {
-    let input = &[b'0', b'0'];
+    let input = &[0, 0];
     if let Ok(tlv) = parse_tlv(input) {
         assert_eq!(tlv.len(), 0);
         assert_eq!(tlv.tlv_type(), &TlvType::End);
@@ -38,15 +38,15 @@ fn parsing_2_byte_end_of_lldpdu_is_ok() {
 
 #[test]
 fn parsing_max_length_tlv_all_zeroes_and_type_is_chassis_id() {
-    let input = &mut [b'0'; 514];
+    let input = &mut [0b0; 514];
     input[0] = 3u8;
     input[1] = 255u8;
     if let Ok(tlv) = parse_tlv(input) {
-        assert_eq!(tlv.len(), 512);
+        assert_eq!(tlv.len(), 511);
         assert_eq!(tlv.tlv_type(), &TlvType::ChassisID);
-        assert_eq!(*tlv.value(), vec![0u8; 512]);
+        assert_eq!(*tlv.value(), vec![0u8; 511]);
     } else {
-        panic!("Parse result should be Ok(), with 512 len and 512 value");
+        panic!("Parse result should be Ok(), with 511 len and 511 value");
     }
 }
 

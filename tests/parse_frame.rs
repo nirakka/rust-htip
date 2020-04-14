@@ -2,7 +2,7 @@ use rust_htip::*;
 
 #[test]
 fn parse_frame_with_one_tlv() {
-    let frame = &[b'0', b'0'];
+    let frame = &[0, 0];
     let result = parse_frame(frame);
     assert!(result.len() == 1, "result length is not 1");
     let res_tlv = result[0]
@@ -13,7 +13,7 @@ fn parse_frame_with_one_tlv() {
 
 #[test]
 fn parse_frame_with_two_tlv() {
-    let frame = &[b'2', b'4', b'a', b'b', b'c', b'd', b'0', b'0'];
+    let frame = &[2, 4, b'a', b'b', b'c', b'd', 0, 0];
     let mut result = parse_frame(frame);
     assert_eq!(result.len(), 2);
     //end tlv here
@@ -25,15 +25,15 @@ fn parse_frame_with_two_tlv() {
         .unwrap()
         .expect("chassis id tlv should be here");
     assert_eq!(tlv.tlv_type(), &TlvType::ChassisID);
-    let expected_value = "abcd".as_bytes();
+    let expected_value = b"abcd";
     assert_eq!(tlv.len(), expected_value.len());
     assert_eq!(tlv.value().as_slice(), expected_value);
 }
 
 #[test]
 fn parse_frame_3tlvs_last_one_error() {
-    let frame = "\x02\x03123\x04\x0512345\x03\x1ftoo short".as_bytes();
-    let mut tlvs = parse_frame(&frame);
+    let frame = b"\x02\x03123\x04\x0512345\x03\x1ftoo short";
+    let mut tlvs = parse_frame(frame);
     assert_eq!(tlvs.pop().unwrap().unwrap_err(), ParsingError::TooShort);
     let second_tlv = tlvs.pop().unwrap().unwrap();
     assert_eq!(
@@ -45,7 +45,7 @@ fn parse_frame_3tlvs_last_one_error() {
 
 #[test]
 fn parse_frame_stops_parsing_after_error() {
-    let frame = "\x02\x03123\x04\x0512345\x03\x1ftoo short\x00\x00".as_bytes();
-    let tlvs = parse_frame(&frame);
+    let frame = b"\x02\x03123\x04\x0512345\x03\x1ftoo short\x00\x00";
+    let tlvs = parse_frame(frame);
     assert_eq!(tlvs.len(), 3);
 }
