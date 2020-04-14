@@ -14,7 +14,7 @@ fn dummy_forwards_buffer_and_returns_value() {
 #[test]
 fn number_parses_1byte_value() {
     let input = vec![0x01, 0xff, 0x3c];
-    let mut parser = Number::new(NumberSize::One);
+    let mut parser = SizedNumber::new(NumberSize::One);
     let remainder = parser.parse(&input).unwrap();
 
     assert_eq!(remainder.len(), 1);
@@ -25,7 +25,7 @@ fn number_parses_1byte_value() {
 #[test]
 fn number_parses_2byte_value() {
     let input = vec![0x02, 0x02, 0x0a];
-    let mut parser = Number::new(NumberSize::Two);
+    let mut parser = SizedNumber::new(NumberSize::Two);
     let remainder = parser.parse(&input).unwrap();
 
     assert_eq!(remainder.len(), 0);
@@ -35,7 +35,7 @@ fn number_parses_2byte_value() {
 #[test]
 fn number_parses_4byte_value() {
     let input = vec![0x04, 0xff, 0xff, 0xff, 0xfe];
-    let mut parser = Number::new(NumberSize::Four);
+    let mut parser = SizedNumber::new(NumberSize::Four);
     let remainder = parser.parse(&input).unwrap();
 
     assert_eq!(remainder.len(), 0);
@@ -45,7 +45,7 @@ fn number_parses_4byte_value() {
 #[test]
 fn number_fails_with_invalid_length() {
     let input = vec![0x0a, 0x02, 0x0a];
-    let mut parser = Number::new(NumberSize::Two);
+    let mut parser = SizedNumber::new(NumberSize::Two);
     let result = parser.parse(&input).err();
 
     assert_eq!(result, Some(HtipError::UnexpectedLength(10)));
@@ -54,11 +54,11 @@ fn number_fails_with_invalid_length() {
 #[test]
 fn number_fails_for_short_input() {
     let input = vec![];
-    let mut parser = Number::new(NumberSize::One);
+    let mut parser = SizedNumber::new(NumberSize::One);
     assert_eq!(parser.parse(&input).err(), Some(HtipError::TooShort));
 
     let input = vec![0x01];
-    let mut parser = Number::new(NumberSize::One);
+    let mut parser = SizedNumber::new(NumberSize::One);
     assert_eq!(parser.parse(&input).err(), Some(HtipError::TooShort));
 }
 
@@ -66,16 +66,16 @@ fn number_fails_for_short_input() {
 fn number_parse_fails_for_short_buffer() {
     //we're expecting 4 bytes, only 3 are present...
     let input = vec![0x04, 0x00, 0x00, 0x00];
-    let mut parser = Number::new(NumberSize::Four);
+    let mut parser = SizedNumber::new(NumberSize::Four);
     assert_eq!(parser.parse(&input).err(), Some(HtipError::TooShort));
 }
 
 #[test]
 fn multiple_parsers_succeed() {
     let mut parsers: Vec<Box<dyn Parser>> = vec![
-        Box::new(Number::new(NumberSize::One)),
+        Box::new(SizedNumber::new(NumberSize::One)),
         Box::new(Dummy(2)),
-        Box::new(Number::new(NumberSize::Four)),
+        Box::new(SizedNumber::new(NumberSize::Four)),
     ];
     let input = vec![0x01, 0x0A, 0xFF, 0xFF, 0x04, 0xFF, 0xFF, 0xFE, 0x00];
 

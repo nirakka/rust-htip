@@ -1,19 +1,31 @@
 use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug, PartialEq, Eq)]
+///These are the errors that a basic parser may produce.
+///The slice represents the original data that caused
+///the error.
 pub enum HtipError<'a> {
+    ///Not enough data to parse
     TooShort,
+    ///The actual length is different from what is expected
     UnexpectedLength(usize),
+    ///A sequence of bytes is different from what it was expected
     NotEqual(&'a [u8]),
-    NotANumber(&'a [u8]),
+    ///The input data does not represent a valid percentage [0-100]
     InvalidPercentage(&'a [u8]),
+    ///The input data does not represent a valid MAC address
     InvalidMac(&'a [u8]),
 }
 
+///An enum holding the various possible types of HTIP data.
 pub enum HtipData {
+    ///Represents a number of up to 4 bytes, as well as percentages.
     U32(u32),
+    ///Rare type, currently used for a 6byte update interval
     U64(u64),
+    ///Represents textual data
     Text(String),
+    ///Represents various binary data
     Binary(Vec<u8>),
 }
 
@@ -97,14 +109,14 @@ pub enum NumberSize {
 }
 
 ///A parser for numbers of fixed size, up to four bytes
-pub struct Number {
+pub struct SizedNumber {
     size: NumberSize,
     value: u32,
 }
 
-impl Number {
+impl SizedNumber {
     pub fn new(size: NumberSize) -> Self {
-        Number { size, value: 0 }
+        SizedNumber { size, value: 0 }
     }
 
     fn check_length(
@@ -120,7 +132,7 @@ impl Number {
     }
 }
 
-impl Parser for Number {
+impl Parser for SizedNumber {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError> {
         if input.is_empty() {
             return Err(HtipError::TooShort);
@@ -131,7 +143,7 @@ impl Parser for Number {
         let actual = input[0] as usize;
         let input = &input[1..];
         //check actual, expected and remaining buffer lengths
-        Number::check_length(self.size as usize, actual, input.len())?;
+        SizedNumber::check_length(self.size as usize, actual, input.len())?;
         //we have the size we expect, try to parse
         //this into a number
         self.value = (0..actual).fold(0u32, |mut acc, index| {
@@ -161,18 +173,18 @@ impl Parser for Dummy {
     }
 }
 
-struct Fixed {
+struct FixedSequence {
     key: Vec<u8>,
     //add other things if you think you need them
 }
 
-impl Fixed {
+impl FixedSequence {
     pub fn new(key: Vec<u8>) -> Self {
-        Fixed { key }
+        FixedSequence { key }
     }
 }
 
-impl Parser for Fixed {
+impl Parser for FixedSequence {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError> {
         unimplemented!()
     }
