@@ -17,6 +17,7 @@ pub enum HtipError<'a> {
     InvalidMac(&'a [u8]),
 }
 
+#[derive(Debug)]
 ///An enum holding the various possible types of HTIP data.
 pub enum HtipData {
     ///Represents a number of up to 4 bytes, as well as percentages.
@@ -29,6 +30,7 @@ pub enum HtipData {
     Binary(Vec<u8>),
 }
 
+#[derive(Debug)]
 pub struct InvalidConversion(HtipData);
 
 impl TryFrom<HtipData> for u32 {
@@ -173,7 +175,7 @@ impl Parser for Dummy {
     }
 }
 
-struct FixedSequence {
+pub struct FixedSequence {
     key: Vec<u8>,
     //add other things if you think you need them
 }

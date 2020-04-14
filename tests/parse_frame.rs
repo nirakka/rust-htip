@@ -25,15 +25,15 @@ fn parse_frame_with_two_tlv() {
         .unwrap()
         .expect("chassis id tlv should be here");
     assert_eq!(tlv.tlv_type(), &TlvType::ChassisID);
-    let expected_value = "abcd".as_bytes();
+    let expected_value = b"abcd";
     assert_eq!(tlv.len(), expected_value.len());
     assert_eq!(tlv.value().as_slice(), expected_value);
 }
 
 #[test]
 fn parse_frame_3tlvs_last_one_error() {
-    let frame = "\x02\x03123\x04\x0512345\x03\x1ftoo short".as_bytes();
-    let mut tlvs = parse_frame(&frame);
+    let frame = b"\x02\x03123\x04\x0512345\x03\x1ftoo short";
+    let mut tlvs = parse_frame(frame);
     assert_eq!(tlvs.pop().unwrap().unwrap_err(), ParsingError::TooShort);
     let second_tlv = tlvs.pop().unwrap().unwrap();
     assert_eq!(
@@ -45,7 +45,7 @@ fn parse_frame_3tlvs_last_one_error() {
 
 #[test]
 fn parse_frame_stops_parsing_after_error() {
-    let frame = "\x02\x03123\x04\x0512345\x03\x1ftoo short\x00\x00".as_bytes();
-    let tlvs = parse_frame(&frame);
+    let frame = b"\x02\x03123\x04\x0512345\x03\x1ftoo short\x00\x00";
+    let tlvs = parse_frame(frame);
     assert_eq!(tlvs.len(), 3);
 }

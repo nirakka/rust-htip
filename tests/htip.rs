@@ -1,4 +1,5 @@
 use rust_htip::htip::*;
+use std::convert::TryInto;
 
 #[test]
 fn dummy_forwards_buffer_and_returns_value() {
@@ -81,7 +82,7 @@ fn multiple_parsers_succeed() {
 
     let mut slice = &input[..];
 
-    let res: Result<(), HtipError> = parsers.iter_mut().try_for_each(|mut parser| {
+    let res: Result<(), HtipError> = parsers.iter_mut().try_for_each(|parser| {
         slice = parser.parse(slice).unwrap();
         Ok(())
     });
@@ -94,4 +95,61 @@ fn multiple_parsers_succeed() {
     assert_eq!(parsers[0].data().into_u32(), Some(10));
     assert_eq!(parsers[1].data().into_u32(), Some(2));
     assert_eq!(parsers[2].data().into_u32(), Some(u32::max_value() - 511));
+}
+
+#[test]
+fn fixed_sequence_matches_and_consumes_buffer() {
+    let input = vec![b'1', b'2', b'3', b'4', b'5'];
+    let mut parser = FixedSequence::new(input.clone());
+    let result = parser.parse(&input);
+    assert!(result.is_ok());
+
+    //has the slice been advanced?
+    let remainder = result.unwrap();
+    assert!(remainder.is_empty());
+
+    let data_vec: Vec<u8> = parser.data().try_into().unwrap();
+    let data_string = String::from_utf8(data_vec).unwrap();
+    assert_eq!(data_string, "12345");
+}
+
+#[test]
+fn fixed_sequence_fails_short_buffer() {
+    let input = vec![0x01, 0x02, 0x03];
+    let mut clone = input.clone();
+    let _ = clone.pop();
+    let mut parser = FixedSequence::new(input);
+    let result = parser.parse(&clone);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+}
+
+#[test]
+fn fixed_sequence_does_not_match() {
+    let original = vec![0x01, 0x02, 0x03, 0x04];
+    let mut altered = original.clone();
+    //change the copy a bit
+    altered[2] = 0x04;
+    altered.pop();
+    let mut parser = FixedSequence::new(altered);
+    let result = parser.parse(&original);
+    assert!(result.is_err());
+
+    let error = result.unwrap_err();
+    //show where the first error occured
+    assert_eq!(error, HtipError::NotEqual(&original[..3]));
+}
+
+#[test]
+fn fixed_sequence_matches_with_longer_input() {
+    let original = vec![0xff; 512];
+    let altered = original[2..].to_owned();
+    let mut parser = FixedSequence::new(altered);
+    let result = parser.parse(&original);
+    assert!(result.is_ok());
+
+    //two bytes should still be remaining
+    let remainder = result.unwrap();
+    assert_eq!(remainder.len(), 2);
 }
