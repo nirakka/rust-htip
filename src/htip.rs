@@ -11,10 +11,12 @@ pub enum HtipError<'a> {
     UnexpectedLength(usize),
     ///A sequence of bytes is different from what it was expected
     NotEqual(&'a [u8]),
-    ///The input data does not represent a valid percentage [0-100]
-    InvalidPercentage(&'a [u8]),
+    ///An invalid percentage, outside the range of [0-100]
+    InvalidPercentage(u8),
     ///The input data does not represent a valid MAC address
     InvalidMac(&'a [u8]),
+    ///The text length is not utf8
+    InvalidText(std::str::Utf8Error),
 }
 
 #[derive(Debug)]
@@ -197,8 +199,14 @@ impl Parser for FixedSequence {
     }
 }
 
-struct Text {
+pub struct Text {
     //add your implementation here
+}
+
+impl Text {
+    pub fn new(max_size: u8) -> Self {
+        unimplemented!()
+    }
 }
 
 impl Parser for Text {
@@ -207,6 +215,25 @@ impl Parser for Text {
     }
 
     //you return a String in the HtipData, copy/clone that
+    fn data(&self) -> HtipData {
+        unimplemented!()
+    }
+}
+
+//maybe reuse FixedSequence and/or SizedNumber?
+pub struct Percentage;
+
+impl Percentage {
+    pub fn new() -> Self {
+        unimplemented!()
+    }
+}
+
+impl Parser for Percentage {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError> {
+        unimplemented!()
+    }
+
     fn data(&self) -> HtipData {
         unimplemented!()
     }

@@ -153,3 +153,126 @@ fn fixed_sequence_matches_with_longer_input() {
     let remainder = result.unwrap();
     assert_eq!(remainder.len(), 2);
 }
+
+#[test]
+fn percentage_is_valid_max_and_advances() {
+    let input = vec![0x01, 0x64, 0xff, 0xff];
+    let mut parser = Percentage::new();
+    let result = parser.parse(&input);
+    assert!(result.is_ok());
+
+    let remainder = result.unwrap();
+    assert_eq!(remainder.len(), 2);
+    assert_eq!(remainder, &input[2..]);
+
+    assert_eq!(parser.data().into_u32(), Some(100u32));
+}
+
+#[test]
+fn percentage_is_valid_min() {
+    let input = vec![0x01, 0x00];
+    let mut parser = Percentage::new();
+    let result = parser.parse(&input);
+    assert!(result.is_ok());
+
+    let remainder = result.unwrap();
+    assert_eq!(remainder.len(), 0);
+
+    assert_eq!(parser.data().into_u32(), Some(0u32));
+}
+
+#[test]
+fn percentage_is_valid() {
+    let input = vec![0x01, 0x32, 0x00];
+    let mut parser = Percentage::new();
+    let _ = parser.parse(&input);
+    assert_eq!(parser.data().into_u32().unwrap(), 50u32);
+}
+
+#[test]
+fn percentage_is_invalid() {
+    let input = vec![0x01, 0x80];
+    let mut parser = Percentage::new();
+    let result = parser.parse(&input);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), HtipError::InvalidPercentage(128));
+}
+
+#[test]
+fn percentage_invalid_length() {
+    let input = vec![0xab, 0x80];
+    let mut parser = Percentage::new();
+    let result = parser.parse(&input);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), HtipError::UnexpectedLength(0xab));
+}
+
+#[test]
+fn percentage_input_too_short() {
+    let input = vec![0x01];
+    let mut parser = Percentage::new();
+    let result = parser.parse(&input);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+}
+
+#[test]
+fn text_input_too_short_when_empty() {
+    let input: Vec<u8> = vec![];
+    assert_eq!(Text::new(2).parse(&input).unwrap_err(), HtipError::TooShort);
+}
+
+#[test]
+fn text_is_1_byte_string_and_advances() {
+    let input = vec![b'a', b'b'];
+    let mut parser = Text::new(1);
+    let result = parser.parse(&input);
+    assert!(result.is_ok());
+
+    let remainder = result.unwrap();
+    assert_eq!(remainder.len(), 1);
+    assert_eq!(remainder[0], b'b');
+
+    let data = parser.data().into_string().unwrap();
+    assert_eq!(data, String::from("a"));
+}
+
+#[test]
+fn text_fails_invalid_utf8() {
+    let invalid_input = b"\xff\x00\xff\xff\xff\xff\xff\xff";
+    let mut parser = Text::new(8);
+    let result = parser.parse(invalid_input);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        HtipError::InvalidText(_) => (),
+        _ => panic!("text parse result should be a std::str::Utf8Error"),
+    }
+}
+
+#[test]
+fn text_valid_string_less_than_max_size() {
+    let input = b"this is a valid string";
+    let mut parser = Text::new(255);
+    let result = parser.parse(input);
+
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 0);
+
+    assert_eq!(
+        parser.data().into_string().unwrap(),
+        String::from("this is a valid string")
+    );
+}
+
+#[test]
+fn text_includes_last_character() {
+    let input = b"abcd";
+    let mut parser = Text::new(4);
+    let result = parser.parse(input);
+    assert!(result.is_ok());
+
+    assert_eq!(parser.data().into_string().unwrap(), String::from("abcd"));
+}
