@@ -99,7 +99,7 @@ impl HtipData {
 }
 
 pub trait Parser {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError>;
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>>;
     fn data(&self) -> HtipData;
 }
 
@@ -137,7 +137,7 @@ impl SizedNumber {
 }
 
 impl Parser for SizedNumber {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
         if input.is_empty() {
             return Err(HtipError::TooShort);
         }
@@ -168,7 +168,7 @@ impl Parser for SizedNumber {
 pub struct Dummy(pub u32);
 
 impl Parser for Dummy {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
         Ok(&input[(self.0 as usize)..])
     }
 
@@ -189,7 +189,7 @@ impl FixedSequence {
 }
 
 impl Parser for FixedSequence {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
         if input.is_empty() || input.len() < self.key.len(){
             return Err(HtipError::TooShort);
         }
@@ -217,7 +217,7 @@ impl Text {
 }
 
 impl Parser for Text {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
         unimplemented!()
     }
 
@@ -237,7 +237,7 @@ impl Percentage {
 }
 
 impl Parser for Percentage {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
         unimplemented!()
     }
 
