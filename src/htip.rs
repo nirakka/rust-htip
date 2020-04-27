@@ -190,12 +190,19 @@ impl FixedSequence {
 
 impl Parser for FixedSequence {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError> {
-        unimplemented!()
+        if input.is_empty() || input.len() < self.key.len(){
+            return Err(HtipError::TooShort);
+        }
+
+        if self.key != input {
+            return Err(HtipError::NotEqual(&input[..3]));
+        }
+            return Ok(&input);
     }
 
     //return an HtipData::Binary
     fn data(&self) -> HtipData {
-        unimplemented!()
+        unimplemented!();
     }
 }
 
