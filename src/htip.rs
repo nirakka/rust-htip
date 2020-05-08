@@ -195,14 +195,24 @@ impl Parser for FixedSequence {
         }
 
         if self.key != input {
-            return Err(HtipError::NotEqual(&input[..3]));
+            let mut diff_p = 0;
+            for (i,j) in self.key.iter().enumerate() {
+                if j != &input[i] {
+                    diff_p += i;
+                    return Err(HtipError::NotEqual(&input[..diff_p+1]));
+                }
+            }
+            
+            return Ok(&input[self.key.len()..]);
         }
-            return Ok(&input);
+
+        // return empty Vec slice
+        return Ok(&input[input.len()..]);
     }
 
     //return an HtipData::Binary
     fn data(&self) -> HtipData {
-        unimplemented!();
+        HtipData::Binary(self.key.clone())
     }
 }
 
