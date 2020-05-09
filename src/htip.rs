@@ -238,20 +238,42 @@ impl Parser for Text {
 }
 
 //maybe reuse FixedSequence and/or SizedNumber?
-pub struct Percentage;
+pub struct Percentage {
+    value: u8,
+}
 
 impl Percentage {
     pub fn new() -> Self {
-        unimplemented!()
+        Percentage {
+            value: 0u8
+        }
     }
 }
 
 impl Parser for Percentage {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
-        unimplemented!()
+        
+        if input.is_empty() || input.len() < 2{
+            return Err(HtipError::TooShort);
+        }
+
+        let size = input[0] as usize;
+
+        if size != 1 {
+            return Err(HtipError::UnexpectedLength(usize::from(size)));
+        }
+
+        let val = input[size];
+
+        if  val > 100 {
+            return Err(HtipError::InvalidPercentage(val));
+        } else {
+            self.value = input[size];
+            Ok(&input[size+1..])
+        }
     }
 
     fn data(&self) -> HtipData {
-        unimplemented!()
+        HtipData::U32(self.value.clone().into())
     }
 }
