@@ -218,22 +218,45 @@ impl Parser for FixedSequence {
 
 pub struct Text {
     //add your implementation here
+    size: u8,
+    value: String,
 }
 
 impl Text {
     pub fn new(max_size: u8) -> Self {
-        unimplemented!()
+        Text{
+            size:max_size,
+            value: "".to_string()
+        }
     }
 }
 
 impl Parser for Text {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
-        unimplemented!()
+        if input.is_empty() {
+            return Err(HtipError::TooShort);
+        }
+
+        let actual = usize::from(self.size);
+        let result;
+        if input.len() < actual {
+            result = String::from_utf8(input.to_vec());
+        } else {
+            result = String::from_utf8(input[..actual].to_vec());
+        }
+
+        if result.is_err() {
+            return Err(HtipError::InvalidText(result.unwrap_err().utf8_error()));
+        } else {
+            self.value = result.unwrap()
+        }
+        
+        Ok(&input[self.value.len()..])
     }
 
     //you return a String in the HtipData, copy/clone that
     fn data(&self) -> HtipData {
-        unimplemented!()
+        HtipData::Text(self.value.clone())
     }
 }
 
