@@ -179,7 +179,6 @@ impl Parser for Dummy {
 
 pub struct FixedSequence {
     key: Vec<u8>,
-    //add other things if you think you need them
 }
 
 impl FixedSequence {
@@ -190,43 +189,34 @@ impl FixedSequence {
 
 impl Parser for FixedSequence {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
-        if input.is_empty() || input.len() < self.key.len(){
+        if input.len() < self.key.len() {
             return Err(HtipError::TooShort);
         }
 
-        if self.key != input {
-            let mut diff_p = 0;
-            for (i,j) in self.key.iter().enumerate() {
-                if j != &input[i] {
-                    diff_p += i;
-                    return Err(HtipError::NotEqual(&input[..diff_p+1]));
-                }
+        for (i, j) in self.key.iter().enumerate() {
+            if j != &input[i] {
+                return Err(HtipError::NotEqual(&input[..i + 1]));
             }
-            
-            return Ok(&input[self.key.len()..]);
         }
 
-        // return empty Vec slice
-        return Ok(&input[input.len()..]);
+        Ok(&input[self.key.len()..])
     }
 
-    //return an HtipData::Binary
     fn data(&self) -> HtipData {
         HtipData::Binary(self.key.clone())
     }
 }
 
 pub struct Text {
-    //add your implementation here
-    size: u8,
-    value: String,
+    max_size: usize,
+    text: String,
 }
 
 impl Text {
     pub fn new(max_size: u8) -> Self {
-        Text{
-            size:max_size,
-            value: "".to_string()
+        Text {
+            max_size: max_size as usize,
+            text: "".to_string(),
         }
     }
 }
@@ -237,66 +227,59 @@ impl Parser for Text {
             return Err(HtipError::TooShort);
         }
 
-        let actual = usize::from(self.size);
-        let result;
-        if input.len() < actual {
-            result = String::from_utf8(input.to_vec());
+        let result = if input.len() < self.max_size {
+            String::from_utf8(input.to_vec())
         } else {
-            result = String::from_utf8(input[..actual].to_vec());
-        }
+            String::from_utf8(input[..self.max_size].to_vec())
+        };
 
-        if result.is_err() {
-            return Err(HtipError::InvalidText(result.unwrap_err().utf8_error()));
-        } else {
-            self.value = result.unwrap()
+        match result {
+            Err(err) => Err(HtipError::InvalidText(err.utf8_error())),
+            Ok(text) => {
+                self.text = text;
+                Ok(&input[self.text.len()..])
+            }
         }
-        
-        Ok(&input[self.value.len()..])
     }
 
-    //you return a String in the HtipData, copy/clone that
     fn data(&self) -> HtipData {
-        HtipData::Text(self.value.clone())
+        HtipData::Text(self.text.clone())
     }
 }
 
-//maybe reuse FixedSequence and/or SizedNumber?
 pub struct Percentage {
     value: u8,
 }
 
 impl Percentage {
     pub fn new() -> Self {
-        Percentage {
-            value: 0u8
-        }
+        Percentage { value: 0u8 }
     }
 }
 
 impl Parser for Percentage {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
-        
-        if input.is_empty() || input.len() < 2{
+        if input.len() < 2 {
             return Err(HtipError::TooShort);
         }
 
         let size = input[0] as usize;
 
         if size != 1 {
-            return Err(HtipError::UnexpectedLength(usize::from(size)));
+            return Err(HtipError::UnexpectedLength(size));
         }
 
-        let val = input[size];
+        let val = input[1];
 
-        if  val > 100 {
-            return Err(HtipError::InvalidPercentage(val));
+        if val > 100 {
+            Err(HtipError::InvalidPercentage(val))
         } else {
             self.value = input[size];
-            Ok(&input[size+1..])
+            Ok(&input[size + 1..])
         }
     }
 
     fn data(&self) -> HtipData {
-        HtipData::U32(self.value.clone().into())
+        HtipData::U32(self.value as u32)
     }
 }

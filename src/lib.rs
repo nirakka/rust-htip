@@ -64,7 +64,7 @@ impl From<u8> for TlvType {
 pub struct TLV {
     ttype: TlvType,
     length: usize,
-    //to create this value, make sure you copy/clone 
+    //to create this value, make sure you copy/clone
     //the contents of the input slice
     value: Vec<u8>,
 }
