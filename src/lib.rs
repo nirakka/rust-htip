@@ -1,3 +1,5 @@
+//TODO figure out proper visibilities
+pub mod dispatcher;
 pub mod htip;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -57,6 +59,12 @@ impl From<u8> for TlvType {
             127u8 => TlvType::Custom,
             128u8..=255u8 => TlvType::Invalid(byte),
         }
+    }
+}
+
+impl From<TlvType> for u8 {
+    fn from(source: TlvType) -> u8 {
+        source.as_byte()
     }
 }
 

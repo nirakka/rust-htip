@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+use macaddr::MacAddr6;
 use rust_htip::htip::*;
 use std::convert::TryInto;
 
@@ -275,4 +277,41 @@ fn text_includes_last_character() {
     assert!(result.is_ok());
 
     assert_eq!(parser.data().into_string().unwrap(), String::from("abcd"));
+}
+
+#[test]
+fn parse_one_mac_ok() {
+    let input = b"\x01\x0A\x0B\x0C\x0E\x0F";
+    let mut parser = Mac::new();
+    let result = parser.parse(input);
+    assert!(result.is_ok());
+    //consumed everything?
+    assert_eq!(result.unwrap().len(), 0);
+
+    let macs = parser.data().into_mac().unwrap();
+    //1 mac, equal to the one in the begining
+    assert_eq!(macs.len(), 1);
+    assert_eq!(macs[0], MacAddr6::new(0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F));
+}
+
+#[test]
+fn short_mac() {
+    let input = b"\x01\x0A\x0B\x0C\x0E";
+    let mut parser = Mac::new();
+    let result = parser.parse(input);
+    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+}
+
+#[test]
+fn parse_three_macs_with_remainder() {
+    let input = b"\x03ABCDEF123456\xFF\xFF\xFF\xFF\xFF\xFFremainder";
+    let mut parser = Mac::new();
+    let result = parser.parse(input).unwrap();
+    assert_eq!(result, b"remainder");
+
+    let macs = parser.data().into_mac().unwrap();
+
+    assert_eq!(macs[0].as_ref(), b"ABCDEF");
+    assert_eq!(macs[1].as_ref(), b"123456");
+    assert!(macs[2].is_broadcast());
 }

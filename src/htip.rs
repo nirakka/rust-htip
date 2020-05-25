@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+use macaddr::MacAddr6;
 use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -14,12 +16,13 @@ pub enum HtipError<'a> {
     ///An invalid percentage, outside the range of [0-100]
     InvalidPercentage(u8),
     ///The input data does not represent a valid MAC address
+    #[deprecated="reason: all 6-byte slices are valid macs"]
     InvalidMac(&'a [u8]),
     ///The text length is not utf8
     InvalidText(std::str::Utf8Error),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 ///An enum holding the various possible types of HTIP data.
 pub enum HtipData {
     ///Represents a number of up to 4 bytes, as well as percentages.
@@ -30,6 +33,8 @@ pub enum HtipData {
     Text(String),
     ///Represents various binary data
     Binary(Vec<u8>),
+    ///Represents a list of mac addresses
+    Mac(Vec<MacAddr6>),
 }
 
 #[derive(Debug)]
@@ -79,6 +84,17 @@ impl TryFrom<HtipData> for Vec<u8> {
     }
 }
 
+impl TryFrom<HtipData> for Vec<MacAddr6> {
+    type Error = InvalidConversion;
+
+    fn try_from(data: HtipData) -> Result<Self, Self::Error> {
+        match data {
+            HtipData::Mac(macs) => Ok(macs),
+            _ => Err(InvalidConversion(data)),
+        }
+    }
+}
+
 ///I am not sure about this API, but I'll try it out for now
 impl HtipData {
     pub fn into_u32(self) -> Option<u32> {
@@ -94,6 +110,10 @@ impl HtipData {
     }
 
     pub fn into_bytes(self) -> Option<Vec<u8>> {
+        self.try_into().ok()
+    }
+
+    pub fn into_mac(self) -> Option<Vec<MacAddr6>> {
         self.try_into().ok()
     }
 }
@@ -207,6 +227,7 @@ impl Parser for FixedSequence {
     }
 }
 
+#[deprecated = "reason: design does not match the 1-byte-length-contents-later common case"]
 pub struct Text {
     max_size: usize,
     text: String,
@@ -247,6 +268,98 @@ impl Parser for Text {
     }
 }
 
+pub struct SizedText {
+    text: String,
+    max_size: usize,
+}
+
+impl SizedText {
+    pub fn new(max_size: usize) -> Self {
+        SizedText {
+            text: String::from(""),
+            max_size,
+        }
+    }
+
+    pub fn exact(size: usize) -> ExactlySizedText {
+        ExactlySizedText {
+            inner: SizedText::new(size),
+            exact_size: size,
+        }
+    }
+
+    fn check_max_size<'a>(max: usize, actual: usize) -> Result<(), HtipError<'a>> {
+        if actual <= max {
+            Ok(())
+        } else {
+            Err(HtipError::UnexpectedLength(actual))
+        }
+    }
+
+    fn check_input_size<'a>(needed: usize, input: &[u8]) -> Result<(), HtipError<'a>> {
+        if needed <= input.len() {
+            Ok(())
+        } else {
+            Err(HtipError::TooShort)
+        }
+    }
+}
+
+impl Parser for SizedText {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+        //first byte is the declared length
+        //check against maximum expected size & that we have enough input
+        let text_size = *input.get(0).ok_or(HtipError::TooShort)? as usize;
+        SizedText::check_max_size(self.max_size, text_size)?;
+        SizedText::check_input_size(text_size, &input[1..])?;
+
+        //we have enough data. Try to parse a utf8-string
+        //ignore the first byte
+        let result = String::from_utf8(input[1..text_size + 1].to_vec());
+        match result {
+            Err(error) => Err(HtipError::InvalidText(error.utf8_error())),
+            Ok(text) => {
+                self.text = text;
+                Ok(&input[text_size + 1..])
+            }
+        }
+    }
+
+    fn data(&self) -> HtipData {
+        HtipData::Text(self.text.clone())
+    }
+}
+
+pub struct ExactlySizedText {
+    inner: SizedText,
+    exact_size: usize,
+}
+
+impl ExactlySizedText {
+    fn check_exact_size<'a>(expected: usize, actual: usize) -> Result<(), HtipError<'a>> {
+        if actual == expected {
+            Ok(())
+        } else {
+            Err(HtipError::UnexpectedLength(actual))
+        }
+    }
+}
+
+impl Parser for ExactlySizedText {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+        //check if the reported size is what we are expecting
+        let text_size = *input.get(0).ok_or(HtipError::TooShort)? as usize;
+        ExactlySizedText::check_exact_size(self.exact_size, text_size)?;
+
+        //proceed as per SizedText
+        self.inner.parse(input)
+    }
+
+    fn data(&self) -> HtipData {
+        self.inner.data()
+    }
+}
+
 pub struct Percentage {
     value: u8,
 }
@@ -281,5 +394,96 @@ impl Parser for Percentage {
 
     fn data(&self) -> HtipData {
         HtipData::U32(self.value as u32)
+    }
+}
+
+pub struct CompositeParser {
+    parts: Vec<Box<dyn Parser>>,
+}
+
+impl CompositeParser {
+    pub fn new() -> Self {
+        CompositeParser { parts: vec![] }
+    }
+
+    pub fn with_part(mut self, part: Box<dyn Parser>) -> Self {
+        self.parts.push(part);
+        self
+    }
+
+    pub fn extractor<F>(self, func: F) -> CompositeParserComplete
+    where
+        F: 'static + Fn(&CompositeParserComplete) -> HtipData,
+    {
+        CompositeParserComplete {
+            parts: self.parts,
+            data: vec![],
+            func: Box::new(func),
+        }
+    }
+}
+
+pub struct CompositeParserComplete {
+    parts: Vec<Box<dyn Parser>>,
+    data: Vec<HtipData>,
+    func: Box<dyn Fn(&CompositeParserComplete) -> HtipData>,
+}
+
+impl Parser for CompositeParserComplete {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+        let mut remaining = input;
+        for parser in &mut self.parts {
+            remaining = parser.parse(remaining)?;
+            self.data.push(parser.data());
+        }
+        Ok(remaining)
+    }
+
+    fn data(&self) -> HtipData {
+        (self.func)(&self)
+    }
+}
+
+pub struct Mac {
+    //TODO put any necessary fields here
+}
+
+impl Mac {
+    pub fn new() -> Self {
+        unimplemented!()
+    }
+}
+
+impl Parser for Mac {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+        unimplemented!()
+    }
+
+    fn data(&self) -> HtipData {
+        unimplemented!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_test() {
+        let mut comp = CompositeParser::new()
+            .with_part(Box::new(Percentage::new()))
+            .with_part(Box::new(FixedSequence::new(b"abc".to_vec())))
+            .with_part(Box::new(FixedSequence::new(b"abc".to_vec())))
+            .with_part(Box::new(Percentage::new()))
+            .extractor(|cp| cp.parts.last().unwrap().data());
+
+        //.add(Box::new(SizedNumber::new(NumberSize::Two)));
+        let pr = comp.parse(b"\x01\x02abcabc\x01\x32");
+        assert_eq!(comp.data().into_u32().unwrap(), 0x32);
+        //let pr = comp.parse(b"abcabc\x02\x01\x01");
+        print!("parse result: {:?}", pr);
+        assert_eq!(comp.parts.len(), 4);
+        let res = comp.data;
+        assert_eq!(res.len(), 4);
     }
 }
