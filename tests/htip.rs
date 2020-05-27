@@ -281,7 +281,7 @@ fn text_includes_last_character() {
 
 #[test]
 fn parse_one_mac_ok() {
-    let input = b"\x01\x0A\x0B\x0C\x0E\x0F";
+    let input = b"\x01\x0A\x0B\x0C\x0D\x0E\x0F";
     let mut parser = Mac::new();
     let result = parser.parse(input);
     assert!(result.is_ok());

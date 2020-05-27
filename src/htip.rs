@@ -446,21 +446,36 @@ impl Parser for CompositeParserComplete {
 
 pub struct Mac {
     //TODO put any necessary fields here
+    value:Vec<[u8;6]>
 }
 
 impl Mac {
     pub fn new() -> Self {
-        unimplemented!()
+        Mac { value: vec![] }
     }
 }
 
 impl Parser for Mac {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
-        unimplemented!()
+        let num = input[0] as usize;
+        let input = &input[1..];
+        if input.len() < 6 {
+            Err(HtipError::TooShort)
+        } else {
+            for i in 0..num {
+                self.value.push(input[6*i..6*(i+1)].try_into().unwrap());
+            }
+
+            //return ramain input
+            Ok(&input[6*num..])
+        }
     }
 
     fn data(&self) -> HtipData {
-        unimplemented!()
+        HtipData::Mac(vec![
+                //MacAddr6::new(
+                //self.value[0],self.value[1],self.value[2],self.value[3],self.value[4],self.value[5],
+                MacAddr6::from(self.value[0])])
     }
 }
 
