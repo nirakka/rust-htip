@@ -445,13 +445,12 @@ impl Parser for CompositeParserComplete {
 }
 
 pub struct Mac {
-    //TODO put any necessary fields here
-    value:Vec<[u8;6]>
+    data:Vec<[u8;6]>
 }
 
 impl Mac {
     pub fn new() -> Self {
-        Mac { value: vec![] }
+        Mac { data: vec![] }
     }
 }
 
@@ -463,19 +462,22 @@ impl Parser for Mac {
             Err(HtipError::TooShort)
         } else {
             for i in 0..num {
-                self.value.push(input[6*i..6*(i+1)].try_into().unwrap());
+                self.data.push(input[i*6..(i+1)*6].try_into().unwrap());
             }
 
             //return ramain input
-            Ok(&input[6*num..])
+            Ok(&input[num*6..])
         }
     }
 
     fn data(&self) -> HtipData {
-        HtipData::Mac(vec![
-                //MacAddr6::new(
-                //self.value[0],self.value[1],self.value[2],self.value[3],self.value[4],self.value[5],
-                MacAddr6::from(self.value[0])])
+        let mut macs = vec![];
+
+        for i in self.data.iter() {
+            macs.push(MacAddr6::from(*i));
+        }
+
+        HtipData::Mac(macs)
     }
 }
 
