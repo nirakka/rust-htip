@@ -16,7 +16,7 @@ pub enum HtipError<'a> {
     ///An invalid percentage, outside the range of [0-100]
     InvalidPercentage(u8),
     ///The input data does not represent a valid MAC address
-    #[deprecated="reason: all 6-byte slices are valid macs"]
+    #[deprecated = "reason: all 6-byte slices are valid macs"]
     InvalidMac(&'a [u8]),
     ///The text length is not utf8
     InvalidText(std::str::Utf8Error),
@@ -445,7 +445,8 @@ impl Parser for CompositeParserComplete {
 }
 
 pub struct Mac {
-    data:Vec<[u8;6]>
+    //TODO: use Vec<MacAddr6>
+    data: Vec<[u8; 6]>,
 }
 
 impl Mac {
@@ -456,17 +457,62 @@ impl Mac {
 
 impl Parser for Mac {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+        //how to make mac addresses
+        //
+        //
+        //from an array of 6
+        //let data : [u8 ; 6] = [1, 2,3,4,5,6];
+        //let macaddr1 = MacAddr6::from(data);
+        //
+        //from a reference to an array of 6
+        //let macaddr2 = MacAddr6::from(b"abcdef".to_owned());
+        //
+        //from a slice
+        //create an empty mac, get the buffer, and copy data from another slice
+        //(note:the slices have to be the same)
+        //let data : &[u8] = &[1, 2, 3, 4, 5, 6, 7, 8, 9];
+        //let macaddr3= MacAddr6::nil().as_mut().copy_from_slice(&data[0..6]);
+        //
+        //from a slice, 2
+        //
+        //let data : &[u8] = &[1, 2, 3, 4, 5, 6, 7, 8, 9];
+        //let macaddr3= MacAddr6::new(data[0], data[1], data[2], data[3], data[4], data[5]);
+        //
+        //prepare an array, copy data to it and use from
+        //
+        //let data : &[u8] = &[1, 2, 3, 4, 5, 6, 7, 8, 9];
+        //let mut raw = [0; 6];
+        //raw.copy_from_slice(&data[0..6]);
+        //let macaddr4 = MacAddr6::from(raw);
+        //
+        //very reasonable and closer to your solution:
+        //
+        //let data : &[u8] = &[1, 2, 3, 4, 5, 6, 7, 8, 9];
+        //let prep: [u8; 6] = data[0..6].try_into().unwrap();
+        //let macaddr5 = MacAddr6::from(prep);
+        //
+        // final form?
+        //
+        //let data : &[u8] = &[1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+        //let macaddr5 = MacAddr6::from(<[u8; 6]>::try_from(&data[0..6]).unwrap());
+
         let num = input[0] as usize;
         let input = &input[1..];
         if input.len() < 6 {
             Err(HtipError::TooShort)
         } else {
+            //TODO see if you can use *chunks*
+            // what is ..end?
+            //self.data = input[1..end].chunks(6).map(|chunk| {
+            // //convert to MacAddr6 here
+            //}).collect();
             for i in 0..num {
-                self.data.push(input[i*6..(i+1)*6].try_into().unwrap());
+                self.data
+                    .push(input[i * 6..(i + 1) * 6].try_into().unwrap());
             }
 
-            //return ramain input
-            Ok(&input[num*6..])
+            Ok(&input[num * 6..])
         }
     }
 

@@ -296,7 +296,7 @@ fn parse_one_mac_ok() {
 
 #[test]
 fn short_mac() {
-    let input = b"\x01\x0A\x0B\x0C\x0E";
+    let input = b"\x01\x0A\x0B\x0C\x0D\x0E";
     let mut parser = Mac::new();
     let result = parser.parse(input);
     assert_eq!(result.unwrap_err(), HtipError::TooShort);
@@ -314,4 +314,12 @@ fn parse_three_macs_with_remainder() {
     assert_eq!(macs[0].as_ref(), b"ABCDEF");
     assert_eq!(macs[1].as_ref(), b"123456");
     assert!(macs[2].is_broadcast());
+}
+
+#[test]
+fn less_mac_input_than_specified() {
+    //specifies 3 macs, but it's one byte short
+    let input = b"\x03ABCDEF123456short";
+    let mut parser = Mac::new();
+    assert_eq!(parser.parse(input).unwrap_err(), HtipError::TooShort);
 }
