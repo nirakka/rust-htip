@@ -446,7 +446,8 @@ impl Parser for CompositeParserComplete {
 
 pub struct Mac {
     //TODO: use Vec<MacAddr6>
-    data: Vec<[u8; 6]>,
+    //data: Vec<[u8; 6]>,
+    data: Vec<MacAddr6>,
 }
 
 impl Mac {
@@ -499,31 +500,22 @@ impl Parser for Mac {
 
         let num = input[0] as usize;
         let input = &input[1..];
-        if input.len() < 6 {
+        let end = num * 6;
+
+        if input.len() < end {
             Err(HtipError::TooShort)
         } else {
-            //TODO see if you can use *chunks*
-            // what is ..end?
-            //self.data = input[1..end].chunks(6).map(|chunk| {
-            // //convert to MacAddr6 here
-            //}).collect();
-            for i in 0..num {
-                self.data
-                    .push(input[i * 6..(i + 1) * 6].try_into().unwrap());
-            }
+            self.data = input[0..end].chunks(6).map(|chunk| {
+             //convert to MacAddr6 here
+                MacAddr6::from(<[u8; 6]>::try_from(chunk).unwrap())
+            }).collect();
 
             Ok(&input[num * 6..])
         }
     }
 
     fn data(&self) -> HtipData {
-        let mut macs = vec![];
-
-        for i in self.data.iter() {
-            macs.push(MacAddr6::from(*i));
-        }
-
-        HtipData::Mac(macs)
+        HtipData::Mac(self.data.clone())
     }
 }
 
