@@ -5,10 +5,11 @@ pub mod htip;
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParsingError<'a> {
     TooShort,
+    //TODO: i'm not sure about this anymore
     Htip(htip::HtipError<'a>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TlvType {
     End,
     ChassisID,

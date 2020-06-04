@@ -20,6 +20,8 @@ pub enum HtipError<'a> {
     InvalidMac(&'a [u8]),
     ///The text length is not utf8
     InvalidText(std::str::Utf8Error),
+    ///Unknown type/subtype
+    Unknown,
 }
 
 #[derive(Debug, Clone)]
@@ -465,9 +467,7 @@ impl Parser for Mac {
         } else {
             self.data = input[0..end]
                 .chunks(6)
-                .map(|chunk| {
-                    MacAddr6::from(<[u8; 6]>::try_from(chunk).unwrap())
-                })
+                .map(|chunk| MacAddr6::from(<[u8; 6]>::try_from(chunk).unwrap()))
                 .collect();
 
             Ok(&input[num * 6..])
