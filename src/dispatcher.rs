@@ -48,7 +48,6 @@ impl Dispatcher {
         instance.register_htip(b"\x01\x02".to_vec(), || Box::new(SizedText::exact(6)));
         //this is "whatever stated in the first byte (maximum length 31)"
         instance.register_htip(b"\x01\x03".to_vec(), || Box::new(SizedText::new(31)));
-        //TODO add the rest!
         //subtype1 info4
         instance.register_htip(b"\x01\x04".to_vec(), || Box::new(SizedText::new(31)));
         //subtype1 info20
@@ -58,15 +57,18 @@ impl Dispatcher {
         //subtype1 info22
         instance.register_htip(b"\x01\x22".to_vec(), || Box::new(Percentage::new()));
         //subtype1 info23
-        instance.register_htip(b"\x01\x23".to_vec(), || Box::new(SizedNumber::new(6)));
+        //This is FIXED, fix the remaining marked with FIX
+        instance.register_htip(b"\x01\x23".to_vec(), || {
+            Box::new(SizedNumber::new(NumberSize::Six))
+        });
         //subtype1 info24
-        instance.register_htip(b"\x01\x24".to_vec(), || Box::new(NumberSize::One));
+        //FIX instance.register_htip(b"\x01\x24".to_vec(), || Box::new(NumberSize::One));
         //subtype1 info25
-        instance.register_htip(b"\x01\x25".to_vec(), || Box::new(NumberSize::One));
+        //FIX instance.register_htip(b"\x01\x25".to_vec(), || Box::new(NumberSize::One));
         //subtype1 info26
-        instance.register_htip(b"\x01\x26".to_vec(), || Box::new(NumberSize::One));
+        //FIX instance.register_htip(b"\x01\x26".to_vec(), || Box::new(NumberSize::One));
         //subtype1 info27
-        instance.register_htip(b"\x01\x27".to_vec(), || Box::new(NumberSize::One));
+        //FIX instance.register_htip(b"\x01\x27".to_vec(), || Box::new(NumberSize::One));
         //subtype1 info50
         instance.register_htip(b"\x01\x50".to_vec(), || Box::new(SizedText::new(63)));
         //subtype1 info51
@@ -78,14 +80,14 @@ impl Dispatcher {
         //subtype1 info54
         instance.register_htip(b"\x01\x54".to_vec(), || Box::new(Percentage::new()));
         //subtype1 info80
-        instance.register_htip(b"\x01\x80".to_vec(), || Box::new(NumberSize::Two));
+        //FIX instance.register_htip(b"\x01\x80".to_vec(), || Box::new(NumberSize::Two));
         //TODO: use a composite parser for this in the future
         //ignore for now
         //subtype1 info255
         //TODO: subtype 2 with composite parser?
         //TODO: subtype 3 with mac parser?
         instance.register_htip(b"\x03".to_vec(), || Box::new(Mac::new()));
-        
+
         instance
     }
 }

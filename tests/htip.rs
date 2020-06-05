@@ -74,6 +74,28 @@ fn number_parse_fails_for_short_buffer() {
 }
 
 #[test]
+fn number_parse_succeeds_for_less_than_expected_size_u64() {
+    //we're expecting up to 6bytes, input declares 2 bytes
+    let input = vec![0x02, 0x01, 0xFF, b'R'];
+    let mut parser = SizedNumber::new(NumberSize::Six);
+    let result = parser.parse(&input).expect("should not fail");
+    //we consumed only the first 3 bytes, the 'R' must still be in its place
+    assert_eq!(result[0], b'R');
+    assert_eq!(parser.data().into_u64().unwrap(), 511u64);
+}
+
+#[test]
+fn number_parse_succeeds_for_less_than_expected_size_u32() {
+    //we're expecting up to 4bytes, input declares 2 bytes
+    let input = vec![0x02, 0x01, 0xFF, b'R'];
+    let mut parser = SizedNumber::new(NumberSize::Four);
+    let result = parser.parse(&input).expect("should not fail");
+    //we consumed only the first 3 bytes, the 'R' must still be in its place
+    assert_eq!(result[0], b'R');
+    assert_eq!(parser.data().into_u32().unwrap(), 511u32);
+}
+
+#[test]
 fn multiple_parsers_succeed() {
     let mut parsers: Vec<Box<dyn Parser>> = vec![
         Box::new(SizedNumber::new(NumberSize::One)),
