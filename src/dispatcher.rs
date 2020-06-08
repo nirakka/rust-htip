@@ -63,12 +63,24 @@ impl Dispatcher {
         });
         //subtype1 info24
         //FIX instance.register_htip(b"\x01\x24".to_vec(), || Box::new(NumberSize::One));
+        instance.register_htip(b"\x01\x24".to_vec(), || {
+            Box::new(SizedNumber::new(NumberSize::One))
+        });
         //subtype1 info25
         //FIX instance.register_htip(b"\x01\x25".to_vec(), || Box::new(NumberSize::One));
+        instance.register_htip(b"\x01\x25".to_vec(), || {
+            Box::new(SizedNumber::new(NumberSize::One))
+        });
         //subtype1 info26
         //FIX instance.register_htip(b"\x01\x26".to_vec(), || Box::new(NumberSize::One));
+        instance.register_htip(b"\x01\x26".to_vec(), || {
+            Box::new(SizedNumber::new(NumberSize::One))
+        });
         //subtype1 info27
         //FIX instance.register_htip(b"\x01\x27".to_vec(), || Box::new(NumberSize::One));
+        instance.register_htip(b"\x01\x27".to_vec(), || {
+            Box::new(SizedNumber::new(NumberSize::One))
+        });
         //subtype1 info50
         instance.register_htip(b"\x01\x50".to_vec(), || Box::new(SizedText::new(63)));
         //subtype1 info51
@@ -81,6 +93,9 @@ impl Dispatcher {
         instance.register_htip(b"\x01\x54".to_vec(), || Box::new(Percentage::new()));
         //subtype1 info80
         //FIX instance.register_htip(b"\x01\x80".to_vec(), || Box::new(NumberSize::Two));
+        instance.register_htip(b"\x01\x80".to_vec(), || {
+            Box::new(SizedNumber::new(NumberSize::Two))
+        });
         //TODO: use a composite parser for this in the future
         //ignore for now
         //subtype1 info255
