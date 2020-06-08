@@ -126,18 +126,20 @@ pub trait Parser {
 }
 
 ///use with the fixed-size number parser
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialOrd, PartialEq, Ord, Eq)]
 pub enum NumberSize {
     One = 1,
     Two,
     Three,
     Four,
+    Five,
+    Six,
 }
 
 ///A parser for numbers of fixed size, up to four bytes
 pub struct SizedNumber {
     size: NumberSize,
-    value: u32,
+    value: u64,
 }
 
 impl SizedNumber {
@@ -150,7 +152,7 @@ impl SizedNumber {
         actual: usize,
         remaining: usize,
     ) -> Result<(), HtipError<'static>> {
-        match (actual == expected, remaining >= expected) {
+        match (actual <= expected, remaining >= actual) {
             (true, true) => Ok(()),
             (true, false) => Err(HtipError::TooShort),
             (false, _) => Err(HtipError::UnexpectedLength(actual)),
@@ -172,9 +174,9 @@ impl Parser for SizedNumber {
         SizedNumber::check_length(self.size as usize, actual, input.len())?;
         //we have the size we expect, try to parse
         //this into a number
-        self.value = (0..actual).fold(0u32, |mut acc, index| {
+        self.value = (0..actual).fold(0u64, |mut acc, index| {
             acc <<= 8;
-            acc += input[index] as u32;
+            acc += input[index] as u64;
             acc
         });
         //consume the bytes we used so far
@@ -182,7 +184,11 @@ impl Parser for SizedNumber {
     }
 
     fn data(&self) -> HtipData {
-        HtipData::U32(self.value)
+        if self.size <= NumberSize::Four {
+            HtipData::U32(self.value as u32)
+        } else {
+            HtipData::U64(self.value)
+        }
     }
 }
 
