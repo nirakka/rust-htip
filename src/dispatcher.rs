@@ -57,27 +57,22 @@ impl Dispatcher {
         //subtype1 info22
         instance.register_htip(b"\x01\x22".to_vec(), || Box::new(Percentage::new()));
         //subtype1 info23
-        //This is FIXED, fix the remaining marked with FIX
         instance.register_htip(b"\x01\x23".to_vec(), || {
             Box::new(SizedNumber::new(NumberSize::Six))
         });
         //subtype1 info24
-        //FIX instance.register_htip(b"\x01\x24".to_vec(), || Box::new(NumberSize::One));
         instance.register_htip(b"\x01\x24".to_vec(), || {
             Box::new(SizedNumber::new(NumberSize::One))
         });
         //subtype1 info25
-        //FIX instance.register_htip(b"\x01\x25".to_vec(), || Box::new(NumberSize::One));
         instance.register_htip(b"\x01\x25".to_vec(), || {
             Box::new(SizedNumber::new(NumberSize::One))
         });
         //subtype1 info26
-        //FIX instance.register_htip(b"\x01\x26".to_vec(), || Box::new(NumberSize::One));
         instance.register_htip(b"\x01\x26".to_vec(), || {
             Box::new(SizedNumber::new(NumberSize::One))
         });
         //subtype1 info27
-        //FIX instance.register_htip(b"\x01\x27".to_vec(), || Box::new(NumberSize::One));
         instance.register_htip(b"\x01\x27".to_vec(), || {
             Box::new(SizedNumber::new(NumberSize::One))
         });
@@ -92,15 +87,13 @@ impl Dispatcher {
         //subtype1 info54
         instance.register_htip(b"\x01\x54".to_vec(), || Box::new(Percentage::new()));
         //subtype1 info80
-        //FIX instance.register_htip(b"\x01\x80".to_vec(), || Box::new(NumberSize::Two));
         instance.register_htip(b"\x01\x80".to_vec(), || {
             Box::new(SizedNumber::new(NumberSize::Two))
         });
         //TODO: use a composite parser for this in the future
-        //ignore for now
         //subtype1 info255
-        //TODO: subtype 2 with composite parser?
-        //TODO: subtype 3 with mac parser?
+        //TODO: use composite parser for this
+        //subtype 2
         instance.register_htip(b"\x03".to_vec(), || Box::new(Mac::new()));
 
         instance
