@@ -357,7 +357,7 @@ fn sized_text_input_too_short_when_empty() {
 
 #[test]
 fn sized_text_input_less_than_expected_length() {
-    let input = b"x06aaaa";
+    let input = b"\x06aaaa";
     assert_eq!(
         SizedText::new(255).parse(input).unwrap_err(),
         HtipError::TooShort
@@ -394,6 +394,15 @@ fn sized_text_fails_invalid_utf8() {
         HtipError::InvalidText(_) => (),
         _ => panic!("text parse result should be a std::str::Utf8Error"),
     }
+}
+
+#[test]
+fn sized_text_zero_length_data_suceeds_with_empty() {
+    let input = b"\x00";
+    let mut parser = SizedText::new(8);
+    let result = parser.parse(input);
+    assert!(result.is_ok());
+    assert_eq!(parser.data().into_string().unwrap(), "");
 }
 
 #[test]
