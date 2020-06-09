@@ -345,3 +345,101 @@ fn less_mac_input_than_specified() {
     let mut parser = Mac::new();
     assert_eq!(parser.parse(input).unwrap_err(), HtipError::TooShort);
 }
+
+#[test]
+fn sized_text_input_too_short_when_empty() {
+    let input = vec![];
+    assert_eq!(
+        SizedText::new(2).parse(&input).unwrap_err(),
+        HtipError::TooShort
+    );
+}
+
+#[test]
+fn sized_text_input_less_than_expected_length() {
+    let input = b"x06aaaa";
+    assert_eq!(
+        SizedText::new(255).parse(input).unwrap_err(),
+        HtipError::TooShort
+    );
+}
+
+#[test]
+fn sized_text_input_exceeds_max_size() {
+    let input = b"\x04abcd";
+    let result = SizedText::new(3).parse(input).unwrap_err();
+    assert_eq!(result, HtipError::UnexpectedLength(input[1..].len()));
+}
+
+#[test]
+fn sized_text_valid_string_less_than_max_size_and_consume_input() {
+    let input = b"\x04abcdefg";
+    let mut parser = SizedText::new(255);
+    let result = parser.parse(input);
+    assert!(result.is_ok());
+    assert_eq!(parser.data().into_string().unwrap(), String::from("abcd"));
+
+    let remainder = result.unwrap();
+    assert_eq!(remainder.len(), 3);
+    assert_eq!(remainder, String::from("efg").as_bytes());
+}
+
+#[test]
+fn sized_text_fails_invalid_utf8() {
+    let invalid_input = b"\x08\xff\x00\xff\xff\xff\xff\xff\xff";
+    let mut parser = SizedText::new(8);
+    let result = parser.parse(invalid_input);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        HtipError::InvalidText(_) => (),
+        _ => panic!("text parse result should be a std::str::Utf8Error"),
+    }
+}
+
+#[test]
+fn exactly_sized_text_input_too_short_when_empty() {
+    let input = vec![];
+    assert_eq!(
+        SizedText::exact(0).parse(&input).unwrap_err(),
+        HtipError::TooShort
+    );
+}
+
+#[test]
+fn exactly_sized_text_input_exceeds_max_size() {
+    let input = b"\x04abcd";
+    let result = SizedText::exact(3).parse(input).unwrap_err();
+    assert_eq!(result, HtipError::UnexpectedLength(input[1..].len()));
+}
+
+#[test]
+fn exactly_sized_text_input_less_than_expected_length() {
+    let input = b"\x04abcd";
+    let result = SizedText::exact(5).parse(input).unwrap_err();
+    assert_eq!(result, HtipError::UnexpectedLength(input[1..].len()));
+}
+
+#[test]
+fn exactly_sized_text_valid_string_and_consume_input() {
+    let input = b"\x04abcd";
+    let mut parser = SizedText::exact(4);
+    let result = parser.parse(input);
+    assert!(result.is_ok());
+    assert_eq!(parser.data().into_string().unwrap(), String::from("abcd"));
+
+    let remainder = result.unwrap();
+    assert_eq!(remainder.len(), 0);
+    assert_eq!(remainder, String::from("").as_bytes());
+}
+
+#[test]
+fn exactly_sized_text_fails_invalid_utf8() {
+    let invalid_input = b"\x08\xff\x00\xff\xff\xff\xff\xff\xff";
+    let mut parser = SizedText::exact(8);
+    let result = parser.parse(invalid_input);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        HtipError::InvalidText(_) => (),
+        _ => panic!("text parse result should be a std::str::Utf8Error"),
+    }
+}
