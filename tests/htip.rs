@@ -96,6 +96,15 @@ fn number_parse_succeeds_for_less_than_expected_size_u32() {
 }
 
 #[test]
+fn number_parse_fails_zero_size_number() {
+    let input = vec![0x00];
+    let mut parser = SizedNumber::new(NumberSize::One);
+    let result = parser.parse(&input);
+
+    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+}
+
+#[test]
 fn multiple_parsers_succeed() {
     let mut parsers: Vec<Box<dyn Parser>> = vec![
         Box::new(SizedNumber::new(NumberSize::One)),

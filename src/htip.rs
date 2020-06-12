@@ -169,6 +169,11 @@ impl Parser for SizedNumber {
         //normal processing
         //consume the length
         let actual = input[0] as usize;
+        //what if it declares zero length? that's probably wrong
+        if actual == 0 {
+            return Err(HtipError::TooShort);
+        };
+
         let input = &input[1..];
         //check actual, expected and remaining buffer lengths
         SizedNumber::check_length(self.size as usize, actual, input.len())?;

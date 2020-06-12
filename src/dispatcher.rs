@@ -170,7 +170,7 @@ mod tests {
         //type 127, length 16
         let frame = b"\xfe\x0f\xe0\x27\x1a\x01\x01\x09123456789\
             \xfe\x0c\xe0\x27\x1a\x01\x02\x06OUIOUI";
-        let mut dsp = Dispatcher::new();
+        let dsp = Dispatcher::new();
         //collect our two tlvs, and do stuff with them
         let tlvs = parse_frame(frame)
             .into_iter()
@@ -190,7 +190,7 @@ mod tests {
     fn find_key_is_none() {
         //unknown oui
         let frame = b"\xfe\x0f\xAA\xBB\x1a\x01\x01\x09123456789";
-        let mut dsp = Dispatcher::new();
+        let dsp = Dispatcher::new();
         let tlvs = parse_frame(frame)
             .into_iter()
             .collect::<Result<Vec<TLV>, _>>()
@@ -210,7 +210,7 @@ mod tests {
     fn simple_tlv_parse_succeeds() {
         let frame = b"\xfe\x0f\xe0\x27\x1a\x01\x01\x09123456789\
             \xfe\x0c\xe0\x27\x1a\x01\x02\x06OUIOUI";
-        let mut dsp = Dispatcher::new();
+        let dsp = Dispatcher::new();
         //collect our two tlvs, and do stuff with them
         let tlvs = parse_frame(frame)
             .into_iter()
