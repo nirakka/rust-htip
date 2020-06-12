@@ -461,3 +461,44 @@ fn exactly_sized_text_fails_invalid_utf8() {
         _ => panic!("text parse result should be a std::str::Utf8Error"),
     }
 }
+
+#[test]
+fn subtype2_parser_succeeds() {
+    let input = b"\x01\x07\x01\x02\x02ABCDEF123456";
+    let mut parser = Connections::new();
+    let result = parser.parse(input);
+    assert!(result.is_ok());
+    let port_info: PerPortInfo = parser.data().try_into().unwrap();
+    assert_eq!(port_info.interface, 7);
+    assert_eq!(port_info.port, 2);
+    assert_eq!(port_info.macs.len(), 2);
+    assert_eq!(port_info.macs[0].as_bytes(), b"ABCDEF");
+    assert_eq!(port_info.macs[1].as_bytes(), b"123456");
+}
+
+#[test]
+fn subtype2_parser_fails_zero_size_number() {
+    let input = b"\x00\x07\x01\x02\x02ABCDEF123456";
+    //--error here ^^^
+    let mut parser = Connections::new();
+    let result = parser.parse(input);
+    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+}
+
+#[test]
+fn subtype2_parser_fails_short_mac_data() {
+    let input = b"\x01\x07\x01\x02\x02ABCDEF12345";
+    //--error here, too short mac ---------------^
+    let mut parser = Connections::new();
+    let result = parser.parse(input);
+    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+}
+
+#[test]
+fn subtype2_parser_succeeds_with_correct_remainder() {
+    let input = b"\x01\x07\x01\x02\x01ABCDEFremainder";
+    //--remainder --------------------------^
+    let mut parser = Connections::new();
+    let result = parser.parse(input).unwrap();
+    assert_eq!(result, b"remainder");
+}

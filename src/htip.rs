@@ -37,6 +37,8 @@ pub enum HtipData {
     Binary(Vec<u8>),
     ///Represents a list of mac addresses
     Mac(Vec<MacAddr6>),
+    ///Subtype 2
+    Connections(PerPortInfo),
 }
 
 #[derive(Debug)]
@@ -92,6 +94,17 @@ impl TryFrom<HtipData> for Vec<MacAddr6> {
     fn try_from(data: HtipData) -> Result<Self, Self::Error> {
         match data {
             HtipData::Mac(macs) => Ok(macs),
+            _ => Err(InvalidConversion(data)),
+        }
+    }
+}
+
+impl TryFrom<HtipData> for PerPortInfo {
+    type Error = InvalidConversion;
+
+    fn try_from(data: HtipData) -> Result<Self, Self::Error> {
+        match data {
+            HtipData::Connections(port_info) => Ok(port_info),
             _ => Err(InvalidConversion(data)),
         }
     }
@@ -487,6 +500,38 @@ impl Parser for Mac {
 
     fn data(&self) -> HtipData {
         HtipData::Mac(self.data.clone())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PerPortInfo {
+    pub interface: u32,
+    pub port: u32,
+    pub macs: Vec<MacAddr6>,
+}
+
+pub struct Connections {
+    inner: CompositeParserComplete,
+}
+
+impl Connections {
+    pub fn new() -> Self {
+        //setup the inner composite parser here
+        //you need 3 parts, 2 sized numbers(1), and 1 mac
+        // + the extractor, to generate a subtype 2 struct
+        unimplemented!()
+    }
+}
+
+impl Parser for Connections {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+        //call the composite parsers's parse
+        unimplemented!()
+    }
+
+    fn data(&self) -> HtipData {
+        //need to return HtipData::Connections(per_port_info: PerPortInfo)
+        unimplemented!()
     }
 }
 
