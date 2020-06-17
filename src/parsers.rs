@@ -1,32 +1,11 @@
 #![allow(deprecated)]
+use super::ParsingError;
 use macaddr::MacAddr6;
 use std::convert::{TryFrom, TryInto};
 
-#[derive(Debug, PartialEq, Eq)]
-///These are the errors that a basic parser may produce.
-///The slice represents the original data that caused
-///the error.
-pub enum HtipError<'a> {
-    ///Not enough data to parse
-    TooShort,
-    ///The actual length is different from what is expected
-    UnexpectedLength(usize),
-    ///A sequence of bytes is different from what it was expected
-    NotEqual(&'a [u8]),
-    ///An invalid percentage, outside the range of [0-100]
-    InvalidPercentage(u8),
-    ///The input data does not represent a valid MAC address
-    #[deprecated = "reason: all 6-byte slices are valid macs"]
-    InvalidMac(&'a [u8]),
-    ///The text length is not utf8
-    InvalidText(std::str::Utf8Error),
-    ///Unknown type/subtype
-    Unknown,
-}
-
 #[derive(Debug, Clone)]
 ///An enum holding the various possible types of HTIP data.
-pub enum HtipData {
+pub enum ParseData {
     ///Represents a number of up to 4 bytes, as well as percentages.
     U32(u32),
     ///Rare type, currently used for a 6byte update interval
@@ -42,76 +21,76 @@ pub enum HtipData {
 }
 
 #[derive(Debug)]
-pub struct InvalidConversion(HtipData);
+pub struct InvalidConversion(ParseData);
 
-impl TryFrom<HtipData> for u32 {
+impl TryFrom<ParseData> for u32 {
     type Error = InvalidConversion;
 
-    fn try_from(data: HtipData) -> Result<Self, Self::Error> {
+    fn try_from(data: ParseData) -> Result<Self, Self::Error> {
         match data {
-            HtipData::U32(value) => Ok(value),
+            ParseData::U32(value) => Ok(value),
             _ => Err(InvalidConversion(data)),
         }
     }
 }
 
-impl TryFrom<HtipData> for u64 {
+impl TryFrom<ParseData> for u64 {
     type Error = InvalidConversion;
 
-    fn try_from(data: HtipData) -> Result<Self, Self::Error> {
+    fn try_from(data: ParseData) -> Result<Self, Self::Error> {
         match data {
-            HtipData::U64(value) => Ok(value),
+            ParseData::U64(value) => Ok(value),
             _ => Err(InvalidConversion(data)),
         }
     }
 }
 
-impl TryFrom<HtipData> for String {
+impl TryFrom<ParseData> for String {
     type Error = InvalidConversion;
 
-    fn try_from(data: HtipData) -> Result<Self, Self::Error> {
+    fn try_from(data: ParseData) -> Result<Self, Self::Error> {
         match data {
-            HtipData::Text(value) => Ok(value),
+            ParseData::Text(value) => Ok(value),
             _ => Err(InvalidConversion(data)),
         }
     }
 }
 
-impl TryFrom<HtipData> for Vec<u8> {
+impl TryFrom<ParseData> for Vec<u8> {
     type Error = InvalidConversion;
 
-    fn try_from(data: HtipData) -> Result<Self, Self::Error> {
+    fn try_from(data: ParseData) -> Result<Self, Self::Error> {
         match data {
-            HtipData::Binary(value) => Ok(value.to_vec()),
+            ParseData::Binary(value) => Ok(value.to_vec()),
             _ => Err(InvalidConversion(data)),
         }
     }
 }
 
-impl TryFrom<HtipData> for Vec<MacAddr6> {
+impl TryFrom<ParseData> for Vec<MacAddr6> {
     type Error = InvalidConversion;
 
-    fn try_from(data: HtipData) -> Result<Self, Self::Error> {
+    fn try_from(data: ParseData) -> Result<Self, Self::Error> {
         match data {
-            HtipData::Mac(macs) => Ok(macs),
+            ParseData::Mac(macs) => Ok(macs),
             _ => Err(InvalidConversion(data)),
         }
     }
 }
 
-impl TryFrom<HtipData> for PerPortInfo {
+impl TryFrom<ParseData> for PerPortInfo {
     type Error = InvalidConversion;
 
-    fn try_from(data: HtipData) -> Result<Self, Self::Error> {
+    fn try_from(data: ParseData) -> Result<Self, Self::Error> {
         match data {
-            HtipData::Connections(port_info) => Ok(port_info),
+            ParseData::Connections(port_info) => Ok(port_info),
             _ => Err(InvalidConversion(data)),
         }
     }
 }
 
 ///I am not sure about this API, but I'll try it out for now
-impl HtipData {
+impl ParseData {
     pub fn into_u32(self) -> Option<u32> {
         self.try_into().ok()
     }
@@ -134,8 +113,8 @@ impl HtipData {
 }
 
 pub trait Parser {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>>;
-    fn data(&self) -> HtipData;
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>>;
+    fn data(&self) -> ParseData;
 }
 
 ///use with the fixed-size number parser
@@ -164,19 +143,19 @@ impl SizedNumber {
         expected: usize,
         actual: usize,
         remaining: usize,
-    ) -> Result<(), HtipError<'static>> {
+    ) -> Result<(), ParsingError<'static>> {
         match (actual <= expected, remaining >= actual) {
             (true, true) => Ok(()),
-            (true, false) => Err(HtipError::TooShort),
-            (false, _) => Err(HtipError::UnexpectedLength(actual)),
+            (true, false) => Err(ParsingError::TooShort),
+            (false, _) => Err(ParsingError::UnexpectedLength(actual)),
         }
     }
 }
 
 impl Parser for SizedNumber {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
         if input.is_empty() {
-            return Err(HtipError::TooShort);
+            return Err(ParsingError::TooShort);
         }
 
         //normal processing
@@ -184,7 +163,7 @@ impl Parser for SizedNumber {
         let actual = input[0] as usize;
         //what if it declares zero length? that's probably wrong
         if actual == 0 {
-            return Err(HtipError::TooShort);
+            return Err(ParsingError::TooShort);
         };
 
         let input = &input[1..];
@@ -201,11 +180,11 @@ impl Parser for SizedNumber {
         Ok(&input[actual..])
     }
 
-    fn data(&self) -> HtipData {
+    fn data(&self) -> ParseData {
         if self.size <= NumberSize::Four {
-            HtipData::U32(self.value as u32)
+            ParseData::U32(self.value as u32)
         } else {
-            HtipData::U64(self.value)
+            ParseData::U64(self.value)
         }
     }
 }
@@ -214,12 +193,12 @@ impl Parser for SizedNumber {
 pub struct Dummy(pub u32);
 
 impl Parser for Dummy {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
         Ok(&input[(self.0 as usize)..])
     }
 
-    fn data(&self) -> HtipData {
-        HtipData::U32(self.0)
+    fn data(&self) -> ParseData {
+        ParseData::U32(self.0)
     }
 }
 
@@ -234,22 +213,22 @@ impl FixedSequence {
 }
 
 impl Parser for FixedSequence {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
         if input.len() < self.key.len() {
-            return Err(HtipError::TooShort);
+            return Err(ParsingError::TooShort);
         }
 
         for (i, j) in self.key.iter().enumerate() {
             if j != &input[i] {
-                return Err(HtipError::NotEqual(&input[..i + 1]));
+                return Err(ParsingError::NotEqual(&input[..i + 1]));
             }
         }
 
         Ok(&input[self.key.len()..])
     }
 
-    fn data(&self) -> HtipData {
-        HtipData::Binary(self.key.clone())
+    fn data(&self) -> ParseData {
+        ParseData::Binary(self.key.clone())
     }
 }
 
@@ -269,9 +248,9 @@ impl Text {
 }
 
 impl Parser for Text {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
         if input.is_empty() {
-            return Err(HtipError::TooShort);
+            return Err(ParsingError::TooShort);
         }
 
         let result = if input.len() < self.max_size {
@@ -281,7 +260,7 @@ impl Parser for Text {
         };
 
         match result {
-            Err(err) => Err(HtipError::InvalidText(err.utf8_error())),
+            Err(err) => Err(ParsingError::InvalidText(err.utf8_error())),
             Ok(text) => {
                 self.text = text;
                 Ok(&input[self.text.len()..])
@@ -289,8 +268,8 @@ impl Parser for Text {
         }
     }
 
-    fn data(&self) -> HtipData {
-        HtipData::Text(self.text.clone())
+    fn data(&self) -> ParseData {
+        ParseData::Text(self.text.clone())
     }
 }
 
@@ -314,28 +293,28 @@ impl SizedText {
         }
     }
 
-    fn check_max_size<'a>(max: usize, actual: usize) -> Result<(), HtipError<'a>> {
+    fn check_max_size<'a>(max: usize, actual: usize) -> Result<(), ParsingError<'a>> {
         if actual <= max {
             Ok(())
         } else {
-            Err(HtipError::UnexpectedLength(actual))
+            Err(ParsingError::UnexpectedLength(actual))
         }
     }
 
-    fn check_input_size<'a>(needed: usize, input: &[u8]) -> Result<(), HtipError<'a>> {
+    fn check_input_size<'a>(needed: usize, input: &[u8]) -> Result<(), ParsingError<'a>> {
         if needed <= input.len() {
             Ok(())
         } else {
-            Err(HtipError::TooShort)
+            Err(ParsingError::TooShort)
         }
     }
 }
 
 impl Parser for SizedText {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
         //first byte is the declared length
         //check against maximum expected size & that we have enough input
-        let text_size = *input.get(0).ok_or(HtipError::TooShort)? as usize;
+        let text_size = *input.get(0).ok_or(ParsingError::TooShort)? as usize;
         SizedText::check_max_size(self.max_size, text_size)?;
         SizedText::check_input_size(text_size, &input[1..])?;
 
@@ -343,7 +322,7 @@ impl Parser for SizedText {
         //ignore the first byte
         let result = String::from_utf8(input[1..text_size + 1].to_vec());
         match result {
-            Err(error) => Err(HtipError::InvalidText(error.utf8_error())),
+            Err(error) => Err(ParsingError::InvalidText(error.utf8_error())),
             Ok(text) => {
                 self.text = text;
                 Ok(&input[text_size + 1..])
@@ -351,8 +330,8 @@ impl Parser for SizedText {
         }
     }
 
-    fn data(&self) -> HtipData {
-        HtipData::Text(self.text.clone())
+    fn data(&self) -> ParseData {
+        ParseData::Text(self.text.clone())
     }
 }
 
@@ -362,26 +341,26 @@ pub struct ExactlySizedText {
 }
 
 impl ExactlySizedText {
-    fn check_exact_size<'a>(expected: usize, actual: usize) -> Result<(), HtipError<'a>> {
+    fn check_exact_size<'a>(expected: usize, actual: usize) -> Result<(), ParsingError<'a>> {
         if actual == expected {
             Ok(())
         } else {
-            Err(HtipError::UnexpectedLength(actual))
+            Err(ParsingError::UnexpectedLength(actual))
         }
     }
 }
 
 impl Parser for ExactlySizedText {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
         //check if the reported size is what we are expecting
-        let text_size = *input.get(0).ok_or(HtipError::TooShort)? as usize;
+        let text_size = *input.get(0).ok_or(ParsingError::TooShort)? as usize;
         ExactlySizedText::check_exact_size(self.exact_size, text_size)?;
 
         //proceed as per SizedText
         self.inner.parse(input)
     }
 
-    fn data(&self) -> HtipData {
+    fn data(&self) -> ParseData {
         self.inner.data()
     }
 }
@@ -397,29 +376,29 @@ impl Percentage {
 }
 
 impl Parser for Percentage {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
         if input.len() < 2 {
-            return Err(HtipError::TooShort);
+            return Err(ParsingError::TooShort);
         }
 
         let size = input[0] as usize;
 
         if size != 1 {
-            return Err(HtipError::UnexpectedLength(size));
+            return Err(ParsingError::UnexpectedLength(size));
         }
 
         let val = input[1];
 
         if val > 100 {
-            Err(HtipError::InvalidPercentage(val))
+            Err(ParsingError::InvalidPercentage(val))
         } else {
             self.value = input[size];
             Ok(&input[size + 1..])
         }
     }
 
-    fn data(&self) -> HtipData {
-        HtipData::U32(self.value as u32)
+    fn data(&self) -> ParseData {
+        ParseData::U32(self.value as u32)
     }
 }
 
@@ -439,7 +418,7 @@ impl CompositeParser {
 
     pub fn extractor<F>(self, func: F) -> CompositeParserComplete
     where
-        F: 'static + Fn(&CompositeParserComplete) -> HtipData,
+        F: 'static + Fn(&CompositeParserComplete) -> ParseData,
     {
         CompositeParserComplete {
             parts: self.parts,
@@ -451,12 +430,12 @@ impl CompositeParser {
 
 pub struct CompositeParserComplete {
     parts: Vec<Box<dyn Parser>>,
-    data: Vec<HtipData>,
-    func: Box<dyn Fn(&CompositeParserComplete) -> HtipData>,
+    data: Vec<ParseData>,
+    func: Box<dyn Fn(&CompositeParserComplete) -> ParseData>,
 }
 
 impl Parser for CompositeParserComplete {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
         let mut remaining = input;
         for parser in &mut self.parts {
             remaining = parser.parse(remaining)?;
@@ -465,7 +444,7 @@ impl Parser for CompositeParserComplete {
         Ok(remaining)
     }
 
-    fn data(&self) -> HtipData {
+    fn data(&self) -> ParseData {
         (self.func)(&self)
     }
 }
@@ -481,13 +460,13 @@ impl Mac {
 }
 
 impl Parser for Mac {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
         let num = input[0] as usize;
         let input = &input[1..];
         let end = num * 6;
 
         if input.len() < end {
-            Err(HtipError::TooShort)
+            Err(ParsingError::TooShort)
         } else {
             self.data = input[0..end]
                 .chunks(6)
@@ -498,8 +477,8 @@ impl Parser for Mac {
         }
     }
 
-    fn data(&self) -> HtipData {
-        HtipData::Mac(self.data.clone())
+    fn data(&self) -> ParseData {
+        ParseData::Mac(self.data.clone())
     }
 }
 
@@ -524,13 +503,13 @@ impl Connections {
 }
 
 impl Parser for Connections {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
+    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
         //call the composite parsers's parse
         unimplemented!()
     }
 
-    fn data(&self) -> HtipData {
-        //need to return HtipData::Connections(per_port_info: PerPortInfo)
+    fn data(&self) -> ParseData {
+        //need to return ParseData::Connections(per_port_info: PerPortInfo)
         unimplemented!()
     }
 }

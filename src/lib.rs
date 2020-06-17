@@ -1,12 +1,24 @@
 //TODO figure out proper visibilities
 pub mod dispatcher;
-pub mod htip;
+pub mod parsers;
 
 #[derive(Debug, PartialEq, Eq)]
+///These are the errors that a basic parser may produce.
+///The slice represents the original data that caused
+///the error.
 pub enum ParsingError<'a> {
+    ///Not enough data to parse
     TooShort,
-    //TODO: i'm not sure about this anymore
-    Htip(htip::HtipError<'a>),
+    ///The actual length is different from what is expected
+    UnexpectedLength(usize),
+    ///A sequence of bytes is different from what it was expected
+    NotEqual(&'a [u8]),
+    ///An invalid percentage, outside the range of [0-100]
+    InvalidPercentage(u8),
+    ///The text is not valid utf8
+    InvalidText(std::str::Utf8Error),
+    ///Unknown type/subtype
+    Unknown,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

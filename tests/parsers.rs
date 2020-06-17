@@ -1,6 +1,7 @@
 #![allow(deprecated)]
 use macaddr::MacAddr6;
-use rust_htip::htip::*;
+use rust_htip::parsers::*;
+use rust_htip::ParsingError;
 use std::convert::TryInto;
 
 #[test]
@@ -51,18 +52,18 @@ fn number_fails_with_invalid_length() {
     let mut parser = SizedNumber::new(NumberSize::Two);
     let result = parser.parse(&input).err();
 
-    assert_eq!(result, Some(HtipError::UnexpectedLength(10)));
+    assert_eq!(result, Some(ParsingError::UnexpectedLength(10)));
 }
 
 #[test]
 fn number_fails_for_short_input() {
     let input = vec![];
     let mut parser = SizedNumber::new(NumberSize::One);
-    assert_eq!(parser.parse(&input).err(), Some(HtipError::TooShort));
+    assert_eq!(parser.parse(&input).err(), Some(ParsingError::TooShort));
 
     let input = vec![0x01];
     let mut parser = SizedNumber::new(NumberSize::One);
-    assert_eq!(parser.parse(&input).err(), Some(HtipError::TooShort));
+    assert_eq!(parser.parse(&input).err(), Some(ParsingError::TooShort));
 }
 
 #[test]
@@ -70,7 +71,7 @@ fn number_parse_fails_for_short_buffer() {
     //we're expecting 4 bytes, only 3 are present...
     let input = vec![0x04, 0x00, 0x00, 0x00];
     let mut parser = SizedNumber::new(NumberSize::Four);
-    assert_eq!(parser.parse(&input).err(), Some(HtipError::TooShort));
+    assert_eq!(parser.parse(&input).err(), Some(ParsingError::TooShort));
 }
 
 #[test]
@@ -101,7 +102,7 @@ fn number_parse_fails_zero_size_number() {
     let mut parser = SizedNumber::new(NumberSize::One);
     let result = parser.parse(&input);
 
-    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+    assert_eq!(result.unwrap_err(), ParsingError::TooShort);
 }
 
 #[test]
@@ -115,7 +116,7 @@ fn multiple_parsers_succeed() {
 
     let mut slice = &input[..];
 
-    let res: Result<(), HtipError> = parsers.iter_mut().try_for_each(|parser| {
+    let res: Result<(), ParsingError> = parsers.iter_mut().try_for_each(|parser| {
         slice = parser.parse(slice).unwrap();
         Ok(())
     });
@@ -155,7 +156,7 @@ fn fixed_sequence_fails_short_buffer() {
     let result = parser.parse(&clone);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+    assert_eq!(result.unwrap_err(), ParsingError::TooShort);
 }
 
 #[test]
@@ -171,7 +172,7 @@ fn fixed_sequence_does_not_match() {
 
     let error = result.unwrap_err();
     //show where the first error occured
-    assert_eq!(error, HtipError::NotEqual(&original[..3]));
+    assert_eq!(error, ParsingError::NotEqual(&original[..3]));
 }
 
 #[test]
@@ -229,7 +230,7 @@ fn percentage_is_invalid() {
     let result = parser.parse(&input);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), HtipError::InvalidPercentage(128));
+    assert_eq!(result.unwrap_err(), ParsingError::InvalidPercentage(128));
 }
 
 #[test]
@@ -239,7 +240,7 @@ fn percentage_invalid_length() {
     let result = parser.parse(&input);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), HtipError::UnexpectedLength(0xab));
+    assert_eq!(result.unwrap_err(), ParsingError::UnexpectedLength(0xab));
 }
 
 #[test]
@@ -249,13 +250,16 @@ fn percentage_input_too_short() {
     let result = parser.parse(&input);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+    assert_eq!(result.unwrap_err(), ParsingError::TooShort);
 }
 
 #[test]
 fn text_input_too_short_when_empty() {
     let input: Vec<u8> = vec![];
-    assert_eq!(Text::new(2).parse(&input).unwrap_err(), HtipError::TooShort);
+    assert_eq!(
+        Text::new(2).parse(&input).unwrap_err(),
+        ParsingError::TooShort
+    );
 }
 
 #[test]
@@ -280,7 +284,7 @@ fn text_fails_invalid_utf8() {
     let result = parser.parse(invalid_input);
     assert!(result.is_err());
     match result.unwrap_err() {
-        HtipError::InvalidText(_) => (),
+        ParsingError::InvalidText(_) => (),
         _ => panic!("text parse result should be a std::str::Utf8Error"),
     }
 }
@@ -330,7 +334,7 @@ fn short_mac() {
     let input = b"\x01\x0A\x0B\x0C\x0D\x0E";
     let mut parser = Mac::new();
     let result = parser.parse(input);
-    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+    assert_eq!(result.unwrap_err(), ParsingError::TooShort);
 }
 
 #[test]
@@ -352,7 +356,7 @@ fn less_mac_input_than_specified() {
     //specifies 3 macs, but it's one byte short
     let input = b"\x03ABCDEF123456short";
     let mut parser = Mac::new();
-    assert_eq!(parser.parse(input).unwrap_err(), HtipError::TooShort);
+    assert_eq!(parser.parse(input).unwrap_err(), ParsingError::TooShort);
 }
 
 #[test]
@@ -360,7 +364,7 @@ fn sized_text_input_too_short_when_empty() {
     let input = vec![];
     assert_eq!(
         SizedText::new(2).parse(&input).unwrap_err(),
-        HtipError::TooShort
+        ParsingError::TooShort
     );
 }
 
@@ -369,7 +373,7 @@ fn sized_text_input_less_than_expected_length() {
     let input = b"\x06aaaa";
     assert_eq!(
         SizedText::new(255).parse(input).unwrap_err(),
-        HtipError::TooShort
+        ParsingError::TooShort
     );
 }
 
@@ -377,7 +381,7 @@ fn sized_text_input_less_than_expected_length() {
 fn sized_text_input_exceeds_max_size() {
     let input = b"\x04abcd";
     let result = SizedText::new(3).parse(input).unwrap_err();
-    assert_eq!(result, HtipError::UnexpectedLength(input[1..].len()));
+    assert_eq!(result, ParsingError::UnexpectedLength(input[1..].len()));
 }
 
 #[test]
@@ -400,7 +404,7 @@ fn sized_text_fails_invalid_utf8() {
     let result = parser.parse(invalid_input);
     assert!(result.is_err());
     match result.unwrap_err() {
-        HtipError::InvalidText(_) => (),
+        ParsingError::InvalidText(_) => (),
         _ => panic!("text parse result should be a std::str::Utf8Error"),
     }
 }
@@ -419,7 +423,7 @@ fn exactly_sized_text_input_too_short_when_empty() {
     let input = vec![];
     assert_eq!(
         SizedText::exact(0).parse(&input).unwrap_err(),
-        HtipError::TooShort
+        ParsingError::TooShort
     );
 }
 
@@ -427,14 +431,14 @@ fn exactly_sized_text_input_too_short_when_empty() {
 fn exactly_sized_text_input_exceeds_max_size() {
     let input = b"\x04abcd";
     let result = SizedText::exact(3).parse(input).unwrap_err();
-    assert_eq!(result, HtipError::UnexpectedLength(input[1..].len()));
+    assert_eq!(result, ParsingError::UnexpectedLength(input[1..].len()));
 }
 
 #[test]
 fn exactly_sized_text_input_less_than_expected_length() {
     let input = b"\x04abcd";
     let result = SizedText::exact(5).parse(input).unwrap_err();
-    assert_eq!(result, HtipError::UnexpectedLength(input[1..].len()));
+    assert_eq!(result, ParsingError::UnexpectedLength(input[1..].len()));
 }
 
 #[test]
@@ -457,7 +461,7 @@ fn exactly_sized_text_fails_invalid_utf8() {
     let result = parser.parse(invalid_input);
     assert!(result.is_err());
     match result.unwrap_err() {
-        HtipError::InvalidText(_) => (),
+        ParsingError::InvalidText(_) => (),
         _ => panic!("text parse result should be a std::str::Utf8Error"),
     }
 }
@@ -482,7 +486,7 @@ fn subtype2_parser_fails_zero_size_number() {
     //--error here ^^^
     let mut parser = Connections::new();
     let result = parser.parse(input);
-    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+    assert_eq!(result.unwrap_err(), ParsingError::TooShort);
 }
 
 #[test]
@@ -491,7 +495,7 @@ fn subtype2_parser_fails_short_mac_data() {
     //--error here, too short mac ---------------^
     let mut parser = Connections::new();
     let result = parser.parse(input);
-    assert_eq!(result.unwrap_err(), HtipError::TooShort);
+    assert_eq!(result.unwrap_err(), ParsingError::TooShort);
 }
 
 #[test]

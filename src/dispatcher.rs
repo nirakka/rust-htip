@@ -1,4 +1,4 @@
-use crate::htip::*;
+use crate::parsers::*;
 use crate::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -20,7 +20,9 @@ impl ParserKey {
 }
 
 pub struct Dispatcher {
+    //hash table with keys to parser constructors
     parsers: HashMap<ParserKey, ParserCtor>,
+    //ordered array of parser keys
     keys: Vec<ParserKey>,
 }
 
@@ -47,7 +49,7 @@ impl Dispatcher {
         }
     }
 
-    fn cmp_key_to_tlv(key_val: &Vec<u8>, tlv_val: &Vec<u8>) -> Ordering {
+    fn cmp_key_to_tlv(key_val: &[u8], tlv_val: &[u8]) -> Ordering {
         let diff = key_val
             .iter()
             .zip(tlv_val)
@@ -86,8 +88,10 @@ impl Dispatcher {
         }
     }
 
-    pub fn parse_tlv<'a>(&self, tlv: &'a TLV) -> Result<HtipData, HtipError<'a>> {
-        let key = self.parser_key_from_tlv(&tlv).ok_or(HtipError::Unknown)?;
+    pub fn parse_tlv<'a>(&self, tlv: &'a TLV) -> Result<ParseData, ParsingError<'a>> {
+        let key = self
+            .parser_key_from_tlv(&tlv)
+            .ok_or(ParsingError::Unknown)?;
         let skip = key.prefix.len();
         let mut parser = self.parsers.get(&key).unwrap()();
         parser.parse(&tlv.value[skip..])?;
