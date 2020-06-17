@@ -29,8 +29,8 @@ fn parsing_2_byte_end_of_lldpdu_is_ok() {
     let input = &[0, 0];
     if let Ok(tlv) = parse_tlv(input) {
         assert_eq!(tlv.len(), 0);
-        assert_eq!(tlv.tlv_type(), &TlvType::End);
-        assert_eq!(tlv.value(), &vec![]);
+        assert_eq!(tlv.tlv_type(), TlvType::End);
+        assert_eq!(tlv.value(), &[]);
     } else {
         panic!("Parse result should be Ok(), with zero len, and zero value");
     }
@@ -43,8 +43,8 @@ fn parsing_max_length_tlv_all_zeroes_and_type_is_chassis_id() {
     input[1] = 255u8;
     if let Ok(tlv) = parse_tlv(input) {
         assert_eq!(tlv.len(), 511);
-        assert_eq!(tlv.tlv_type(), &TlvType::ChassisID);
-        assert_eq!(*tlv.value(), vec![0u8; 511]);
+        assert_eq!(tlv.tlv_type(), TlvType::ChassisID);
+        assert_eq!(tlv.value(), vec![0u8; 511].as_slice());
     } else {
         panic!("Parse result should be Ok(), with 511 len and 511 value");
     }

@@ -8,7 +8,7 @@ fn parse_frame_with_one_tlv() {
     let res_tlv = result[0]
         .as_ref()
         .expect("an end tlv should be present here");
-    assert_eq!(res_tlv.tlv_type(), &TlvType::End);
+    assert_eq!(res_tlv.tlv_type(), TlvType::End);
 }
 
 #[test]
@@ -18,16 +18,16 @@ fn parse_frame_with_two_tlv() {
     assert_eq!(result.len(), 2);
     //end tlv here
     let tlv = result.pop().unwrap().expect("end tlv should be here");
-    assert_eq!(tlv.tlv_type(), &TlvType::End);
+    assert_eq!(tlv.tlv_type(), TlvType::End);
 
     let tlv = result
         .pop()
         .unwrap()
         .expect("chassis id tlv should be here");
-    assert_eq!(tlv.tlv_type(), &TlvType::ChassisID);
+    assert_eq!(tlv.tlv_type(), TlvType::ChassisID);
     let expected_value = b"abcd";
     assert_eq!(tlv.len(), expected_value.len());
-    assert_eq!(tlv.value().as_slice(), expected_value);
+    assert_eq!(tlv.value(), expected_value);
 }
 
 #[test]
@@ -36,10 +36,7 @@ fn parse_frame_3tlvs_last_one_error() {
     let mut tlvs = parse_frame(frame);
     assert_eq!(tlvs.pop().unwrap().unwrap_err(), ParsingError::TooShort);
     let second_tlv = tlvs.pop().unwrap().unwrap();
-    assert_eq!(
-        String::from_utf8(second_tlv.value().clone()).unwrap(),
-        "12345"
-    );
+    assert_eq!(second_tlv.value(), b"12345");
     assert_eq!(second_tlv.len(), 5);
 }
 

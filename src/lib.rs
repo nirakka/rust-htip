@@ -82,24 +82,22 @@ impl From<TlvType> for u8 {
 }
 
 #[derive(Debug)]
-pub struct TLV {
+pub struct TLV<'a> {
     ttype: TlvType,
     length: usize,
-    //to create this value, make sure you copy/clone
-    //the contents of the input slice
-    value: Vec<u8>,
+    value: &'a [u8],
 }
 
-impl TLV {
-    pub fn tlv_type(&self) -> &TlvType {
-        &self.ttype
+impl TLV<'_> {
+    pub fn tlv_type(&self) -> TlvType {
+        self.ttype
     }
 
     pub fn len(&self) -> usize {
         self.length
     }
 
-    pub fn value(&self) -> &Vec<u8> {
+    pub fn value(&self) -> &[u8] {
         &self.value
     }
 
@@ -129,7 +127,7 @@ pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
         ttype: TlvType::from(input[0] >> 1),
         length,
         //we have to clone the value
-        value: input[2..2 + length].to_vec(),
+        value: &input[2..2 + length],
     })
 }
 
