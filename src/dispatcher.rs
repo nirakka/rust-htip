@@ -92,10 +92,11 @@ impl Dispatcher {
         let key = self
             .parser_key_from_tlv(&tlv)
             .ok_or(ParsingError::Unknown)?;
-        let skip = key.prefix.len();
+
         let mut parser = self.parsers.get(&key).unwrap()();
-        parser.parse(&tlv.value[skip..])?;
-        Ok(parser.data())
+        let mut context = Context::new(&tlv.value);
+        //TODO emit a warning somewhere if we have unconsumed data
+        parser.parse(&mut context)
     }
 
     pub fn new() -> Self {

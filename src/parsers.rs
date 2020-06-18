@@ -1,7 +1,27 @@
-#![allow(deprecated)]
 use super::ParsingError;
 use macaddr::MacAddr6;
 use std::convert::{TryFrom, TryInto};
+
+pub trait Parser {
+    fn parse<'a, 's>(
+        &mut self,
+        context: &'a mut Context<'s>,
+    ) -> Result<ParseData, ParsingError<'s>>;
+}
+
+pub struct Context<'a> {
+    data: &'a [u8],
+}
+
+impl<'a> Context<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
+        Context { data }
+    }
+
+    pub fn set(&mut self, data: &'a [u8]) {
+        self.data = data;
+    }
+}
 
 #[derive(Debug, Clone)]
 ///An enum holding the various possible types of HTIP data.
@@ -112,11 +132,6 @@ impl ParseData {
     }
 }
 
-pub trait Parser {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>>;
-    fn data(&self) -> ParseData;
-}
-
 ///use with the fixed-size number parser
 #[derive(Clone, Copy, PartialOrd, PartialEq, Ord, Eq)]
 pub enum NumberSize {
@@ -150,10 +165,23 @@ impl SizedNumber {
             (false, _) => Err(ParsingError::UnexpectedLength(actual)),
         }
     }
+
+    fn data(&self) -> ParseData {
+        if self.size <= NumberSize::Four {
+            ParseData::U32(self.value as u32)
+        } else {
+            ParseData::U64(self.value)
+        }
+    }
 }
 
 impl Parser for SizedNumber {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
+    fn parse<'a, 's>(
+        &mut self,
+        context: &'a mut Context<'s>,
+    ) -> Result<ParseData, ParsingError<'s>> {
+        let input = context.data;
+
         if input.is_empty() {
             return Err(ParsingError::TooShort);
         }
@@ -176,16 +204,10 @@ impl Parser for SizedNumber {
             acc += input[index] as u64;
             acc
         });
-        //consume the bytes we used so far
-        Ok(&input[actual..])
-    }
 
-    fn data(&self) -> ParseData {
-        if self.size <= NumberSize::Four {
-            ParseData::U32(self.value as u32)
-        } else {
-            ParseData::U64(self.value)
-        }
+        //consume the bytes we used so far
+        context.set(&input[actual..]);
+        Ok(self.data())
     }
 }
 
@@ -193,12 +215,9 @@ impl Parser for SizedNumber {
 pub struct Dummy(pub u32);
 
 impl Parser for Dummy {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
-        Ok(&input[(self.0 as usize)..])
-    }
-
-    fn data(&self) -> ParseData {
-        ParseData::U32(self.0)
+    fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
+        ctx.set(&ctx.data[self.0 as usize..]);
+        Ok(ParseData::U32(self.0))
     }
 }
 
@@ -213,7 +232,9 @@ impl FixedSequence {
 }
 
 impl Parser for FixedSequence {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
+    fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
+        let input = ctx.data;
+
         if input.len() < self.key.len() {
             return Err(ParsingError::TooShort);
         }
@@ -224,31 +245,27 @@ impl Parser for FixedSequence {
             }
         }
 
-        Ok(&input[self.key.len()..])
-    }
-
-    fn data(&self) -> ParseData {
-        ParseData::Binary(self.key.clone())
+        ctx.set(&input[self.key.len()..]);
+        Ok(ParseData::Binary(self.key.clone()))
     }
 }
 
-#[deprecated = "reason: design does not match the 1-byte-length-contents-later common case"]
 pub struct Text {
     max_size: usize,
-    text: String,
 }
 
 impl Text {
     pub fn new(max_size: u8) -> Self {
         Text {
             max_size: max_size as usize,
-            text: "".to_string(),
         }
     }
 }
 
 impl Parser for Text {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
+    fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
+        let input = ctx.data;
+
         if input.is_empty() {
             return Err(ParsingError::TooShort);
         }
@@ -262,28 +279,20 @@ impl Parser for Text {
         match result {
             Err(err) => Err(ParsingError::InvalidText(err.utf8_error())),
             Ok(text) => {
-                self.text = text;
-                Ok(&input[self.text.len()..])
+                ctx.set(&input[text.len()..]);
+                Ok(ParseData::Text(text.clone()))
             }
         }
-    }
-
-    fn data(&self) -> ParseData {
-        ParseData::Text(self.text.clone())
     }
 }
 
 pub struct SizedText {
-    text: String,
     max_size: usize,
 }
 
 impl SizedText {
     pub fn new(max_size: usize) -> Self {
-        SizedText {
-            text: String::from(""),
-            max_size,
-        }
+        SizedText { max_size }
     }
 
     pub fn exact(size: usize) -> ExactlySizedText {
@@ -311,7 +320,8 @@ impl SizedText {
 }
 
 impl Parser for SizedText {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
+    fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
+        let input = ctx.data;
         //first byte is the declared length
         //check against maximum expected size & that we have enough input
         let text_size = *input.get(0).ok_or(ParsingError::TooShort)? as usize;
@@ -324,14 +334,11 @@ impl Parser for SizedText {
         match result {
             Err(error) => Err(ParsingError::InvalidText(error.utf8_error())),
             Ok(text) => {
-                self.text = text;
-                Ok(&input[text_size + 1..])
+                //input = &mut input[text_size + 1..];
+                ctx.set(&input[text_size + 1..]);
+                Ok(ParseData::Text(text.clone()))
             }
         }
-    }
-
-    fn data(&self) -> ParseData {
-        ParseData::Text(self.text.clone())
     }
 }
 
@@ -351,54 +358,43 @@ impl ExactlySizedText {
 }
 
 impl Parser for ExactlySizedText {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
+    fn parse<'a, 's>(&mut self, input: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
         //check if the reported size is what we are expecting
-        let text_size = *input.get(0).ok_or(ParsingError::TooShort)? as usize;
+        let text_size = *input.data.get(0).ok_or(ParsingError::TooShort)? as usize;
         ExactlySizedText::check_exact_size(self.exact_size, text_size)?;
 
         //proceed as per SizedText
         self.inner.parse(input)
     }
-
-    fn data(&self) -> ParseData {
-        self.inner.data()
-    }
 }
 
-pub struct Percentage {
-    value: u8,
-}
+pub struct Percentage;
 
 impl Percentage {
     pub fn new() -> Self {
-        Percentage { value: 0u8 }
+        Percentage {}
     }
 }
 
 impl Parser for Percentage {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
+    fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
+        let input = ctx.data;
         if input.len() < 2 {
             return Err(ParsingError::TooShort);
         }
 
         let size = input[0] as usize;
-
         if size != 1 {
             return Err(ParsingError::UnexpectedLength(size));
         }
 
         let val = input[1];
-
         if val > 100 {
             Err(ParsingError::InvalidPercentage(val))
         } else {
-            self.value = input[size];
-            Ok(&input[size + 1..])
+            ctx.set(&input[size + 1..]);
+            Ok(ParseData::U32(val as u32))
         }
-    }
-
-    fn data(&self) -> ParseData {
-        ParseData::U32(self.value as u32)
     }
 }
 
@@ -435,32 +431,26 @@ pub struct CompositeParserComplete {
 }
 
 impl Parser for CompositeParserComplete {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
-        let mut remaining = input;
+    fn parse<'a, 's>(&mut self, input: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
         for parser in &mut self.parts {
-            remaining = parser.parse(remaining)?;
-            self.data.push(parser.data());
+            self.data.push(parser.parse(input)?);
         }
-        Ok(remaining)
-    }
-
-    fn data(&self) -> ParseData {
-        (self.func)(&self)
+        Ok((self.func)(&self))
     }
 }
 
-pub struct Mac {
-    data: Vec<MacAddr6>,
-}
+pub struct Mac;
 
 impl Mac {
     pub fn new() -> Self {
-        Mac { data: vec![] }
+        Mac {}
     }
 }
 
 impl Parser for Mac {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
+    fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
+        let input = ctx.data;
+        //TODO wtf? check for zero-sized input?
         let num = input[0] as usize;
         let input = &input[1..];
         let end = num * 6;
@@ -468,17 +458,14 @@ impl Parser for Mac {
         if input.len() < end {
             Err(ParsingError::TooShort)
         } else {
-            self.data = input[0..end]
+            let data = input[0..end]
                 .chunks(6)
                 .map(|chunk| MacAddr6::from(<[u8; 6]>::try_from(chunk).unwrap()))
                 .collect();
 
-            Ok(&input[num * 6..])
+            ctx.set(&input[num * 6..]);
+            Ok(ParseData::Mac(data))
         }
-    }
-
-    fn data(&self) -> ParseData {
-        ParseData::Mac(self.data.clone())
     }
 }
 
@@ -503,19 +490,14 @@ impl Connections {
 }
 
 impl Parser for Connections {
-    fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], ParsingError<'a>> {
+    fn parse<'a, 's>(&mut self, input: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
         //call the composite parsers's parse
-        unimplemented!()
-    }
-
-    fn data(&self) -> ParseData {
-        //need to return ParseData::Connections(per_port_info: PerPortInfo)
         unimplemented!()
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod scratch {
     use super::*;
 
     #[test]
