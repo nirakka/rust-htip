@@ -93,8 +93,10 @@ impl Dispatcher {
             .parser_key_from_tlv(&tlv)
             .ok_or(ParsingError::Unknown)?;
 
+        let skip = key.prefix.len();
+
         let mut parser = self.parsers.get(&key).unwrap()();
-        let mut context = Context::new(&tlv.value);
+        let mut context = Context::new(&tlv.value[skip..]);
         //TODO emit a warning somewhere if we have unconsumed data
         parser.parse(&mut context)
     }
@@ -209,6 +211,22 @@ mod tests {
     fn adding_key_twice_panics() {
         let mut dsp = Dispatcher::new();
         dsp.register_htip(b"\x01\x01".to_vec(), || Box::new(SizedText::new(255)));
+    }
+
+    #[test]
+    fn one_tlv_parse_succeeds() {
+        let frame = b"\xfe\x0f\xe0\x27\x1a\x01\x01\x09123456789";
+        let dsp = Dispatcher::new();
+        //collect our two tlvs, and do stuff with them
+        let tlvs = parse_frame(frame)
+            .into_iter()
+            .collect::<Result<Vec<TLV>, _>>()
+            .unwrap();
+        assert_eq!(tlvs.len(), 1);
+        assert_eq!(
+            "123456789",
+            dsp.parse_tlv(&tlvs[0]).unwrap().into_string().unwrap()
+        );
     }
 
     #[test]

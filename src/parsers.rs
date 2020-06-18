@@ -280,7 +280,7 @@ impl Parser for Text {
             Err(err) => Err(ParsingError::InvalidText(err.utf8_error())),
             Ok(text) => {
                 ctx.set(&input[text.len()..]);
-                Ok(ParseData::Text(text.clone()))
+                Ok(ParseData::Text(text))
             }
         }
     }
@@ -336,7 +336,7 @@ impl Parser for SizedText {
             Ok(text) => {
                 //input = &mut input[text_size + 1..];
                 ctx.set(&input[text_size + 1..]);
-                Ok(ParseData::Text(text.clone()))
+                Ok(ParseData::Text(text))
             }
         }
     }
@@ -450,8 +450,7 @@ impl Mac {
 impl Parser for Mac {
     fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
         let input = ctx.data;
-        //TODO wtf? check for zero-sized input?
-        let num = input[0] as usize;
+        let num = *input.get(0).ok_or(ParsingError::TooShort)? as usize;
         let input = &input[1..];
         let end = num * 6;
 
@@ -507,15 +506,524 @@ mod scratch {
             .with_part(Box::new(FixedSequence::new(b"abc".to_vec())))
             .with_part(Box::new(FixedSequence::new(b"abc".to_vec())))
             .with_part(Box::new(Percentage::new()))
-            .extractor(|cp| cp.parts.last().unwrap().data());
+            .extractor(|cp| cp.data.last().cloned().unwrap());
 
-        //.add(Box::new(SizedNumber::new(NumberSize::Two)));
-        let pr = comp.parse(b"\x01\x02abcabc\x01\x32");
-        assert_eq!(comp.data().into_u32().unwrap(), 0x32);
-        //let pr = comp.parse(b"abcabc\x02\x01\x01");
-        print!("parse result: {:?}", pr);
+        let mut context = Context::new(b"\x01\x02abcabc\x01\x32");
+        let result = comp.parse(&mut context);
+        assert_eq!(result.is_ok(), true);
+        assert_eq!(result.unwrap().into_u32().unwrap(), 0x32);
         assert_eq!(comp.parts.len(), 4);
-        let res = comp.data;
-        assert_eq!(res.len(), 4);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dummy_forwards_buffer_and_returns_value() {
+        let mut context = Context::new(b"\x00\x01\x02");
+        let mut dummy = Dummy(2);
+        let result = dummy.parse(&mut context).unwrap();
+
+        assert_eq!(context.data.len(), 1);
+        assert_eq!(context.data[0], 0x02);
+        assert_eq!(result.into_u32(), Some(2));
+    }
+
+    #[test]
+    fn number_parses_1byte_value() {
+        //let input = vec![0x01, 0xff, 0x3c];
+        let mut ctx = Context::new(b"\x01\xff\x3c");
+        let mut parser = SizedNumber::new(NumberSize::One);
+        //let remainder = parser.parse(&input).unwrap();
+        let result = parser.parse(&mut ctx).unwrap();
+        assert_eq!(result.into_u32(), Some(255));
+
+        //consumed 2 bytes? unchanged remainder?
+        assert_eq!(ctx.data.len(), 1);
+        assert_eq!(ctx.data[0], 0x3c);
+    }
+
+    #[test]
+    fn number_parses_2byte_value() {
+        let mut ctx = Context::new(b"\x02\x02\x0a");
+        let mut parser = SizedNumber::new(NumberSize::Two);
+        let result = parser.parse(&mut ctx).unwrap();
+
+        assert_eq!(ctx.data.len(), 0);
+        assert_eq!(result.into_u32(), Some(522));
+    }
+
+    #[test]
+    fn number_parses_4byte_value() {
+        let mut ctx = Context::new(b"\x04\xff\xff\xff\xfe");
+        let mut parser = SizedNumber::new(NumberSize::Four);
+        let result = parser.parse(&mut ctx).unwrap();
+
+        assert_eq!(ctx.data.len(), 0);
+        assert_eq!(result.into_u32(), Some(u32::max_value() - 1));
+    }
+
+    #[test]
+    fn number_fails_with_invalid_length() {
+        let mut ctx = Context::new(b"\x0a\x02\x0a");
+        let mut parser = SizedNumber::new(NumberSize::Two);
+        let result = parser.parse(&mut ctx).err();
+
+        assert_eq!(result, Some(ParsingError::UnexpectedLength(10)));
+    }
+
+    #[test]
+    fn number_fails_for_short_input() {
+        let mut ctx = Context::new(b"");
+        let mut parser = SizedNumber::new(NumberSize::One);
+        assert_eq!(parser.parse(&mut ctx).err(), Some(ParsingError::TooShort));
+
+        let mut ctx = Context::new(b"\x01");
+        let mut parser = SizedNumber::new(NumberSize::One);
+        assert_eq!(parser.parse(&mut ctx).err(), Some(ParsingError::TooShort));
+    }
+
+    #[test]
+    fn number_parse_fails_for_short_buffer() {
+        //we're expecting 4 bytes, only 3 are present...
+        let mut ctx = Context::new(b"\x04\x00\x00\x00");
+        let mut parser = SizedNumber::new(NumberSize::Four);
+        assert_eq!(parser.parse(&mut ctx).err(), Some(ParsingError::TooShort));
+    }
+
+    #[test]
+    fn number_parse_succeeds_for_less_than_expected_size_u64() {
+        //we're expecting up to 6bytes, input declares 2 bytes
+        let mut ctx = Context::new(b"\x02\x01\xFFR");
+        let mut parser = SizedNumber::new(NumberSize::Six);
+        let result = parser.parse(&mut ctx).expect("should not fail");
+        assert_eq!(result.into_u64().unwrap(), 511u64);
+        //we consumed only the first 3 bytes, the 'R' must still be in its place
+        assert_eq!(ctx.data[0], b'R');
+    }
+
+    #[test]
+    fn number_parse_succeeds_for_less_than_expected_size_u32() {
+        //we're expecting up to 4bytes, input declares 2 bytes
+        let mut ctx = Context::new(b"\x02\x01\xFFR");
+        let mut parser = SizedNumber::new(NumberSize::Four);
+        let result = parser.parse(&mut ctx).expect("should not fail");
+        //we consumed only the first 3 bytes, the 'R' must still be in its place
+        assert_eq!(ctx.data[0], b'R');
+        assert_eq!(result.into_u32().unwrap(), 511u32);
+    }
+
+    #[test]
+    fn number_parse_fails_zero_size_number() {
+        let mut ctx = Context::new(b"\x00");
+        let mut parser = SizedNumber::new(NumberSize::One);
+        let result = parser.parse(&mut ctx);
+
+        assert_eq!(result.unwrap_err(), ParsingError::TooShort);
+    }
+
+    #[test]
+    fn multiple_parsers_succeed() {
+        let mut parsers: Vec<Box<dyn Parser>> = vec![
+            Box::new(SizedNumber::new(NumberSize::One)),
+            Box::new(Dummy(2)),
+            Box::new(SizedNumber::new(NumberSize::Four)),
+        ];
+        let mut ctx = Context::new(b"\x01\x0A\xFF\xFF\x04\xFF\xFF\xFE\x00");
+
+        //let mut slice = &input[..];
+
+        //let res: Result<(), ParsingError> = parsers.iter_mut().try_for_each(|parser| {
+        //    slice = parser.parse(slice).unwrap();
+        //    Ok(())
+        //});
+        let result: Result<Vec<ParseData>, ParsingError> = parsers
+            .iter_mut()
+            .map(|parser| parser.parse(&mut ctx))
+            .collect();
+
+        let data = result.unwrap();
+        //is result exhausted?
+        assert_eq!(ctx.data.len(), 0);
+        //test parser results?
+        assert_eq!(data[0].clone().into_u32(), Some(10));
+        assert_eq!(data[1].clone().into_u32(), Some(2));
+        assert_eq!(data[2].clone().into_u32(), Some(u32::max_value() - 511));
+    }
+
+    #[test]
+    fn fixed_sequence_matches_and_consumes_buffer() {
+        let mut ctx = Context::new(b"12345");
+        let mut parser = FixedSequence::new(ctx.data.to_vec());
+        let result = parser.parse(&mut ctx).unwrap();
+
+        //has the slice been advanced?
+        assert!(ctx.data.is_empty());
+
+        let data_vec: Vec<u8> = result.try_into().unwrap();
+        let data_string = String::from_utf8(data_vec).unwrap();
+        assert_eq!(data_string, "12345");
+    }
+
+    #[test]
+    fn fixed_sequence_fails_short_buffer() {
+        let mut ctx = Context::new(b"\x01\x02");
+        let mut parser = FixedSequence::new(b"\x01\x02\x03".to_vec());
+        let result = parser.parse(&mut ctx);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), ParsingError::TooShort);
+    }
+
+    #[test]
+    fn fixed_sequence_does_not_match() {
+        let original = vec![0x01, 0x02, 0x03, 0x04];
+        let mut altered = original.clone();
+        //change the copy a bit
+        altered[2] = 0x04;
+        altered.pop();
+        let mut parser = FixedSequence::new(altered);
+        let result = parser.parse(&mut Context::new(&original));
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        //show where the first error occured
+        assert_eq!(error, ParsingError::NotEqual(&original[..3]));
+    }
+
+    #[test]
+    fn fixed_sequence_matches_with_longer_input() {
+        let original = vec![0xff; 512];
+        let altered = original[2..].to_owned();
+        let mut parser = FixedSequence::new(altered);
+        let mut ctx = Context::new(&original);
+        let result = parser.parse(&mut ctx);
+        assert!(result.is_ok());
+
+        //two bytes should still be remaining
+        assert_eq!(ctx.data.len(), 2);
+    }
+
+    #[test]
+    fn percentage_is_valid_max_and_advances() {
+        let mut ctx = Context::new(b"\x01\x64\xff\xff");
+        let mut parser = Percentage::new();
+        let result = parser.parse(&mut ctx);
+
+        let remainder = &ctx.data;
+        assert_eq!(remainder.len(), 2);
+        assert_eq!(remainder, &b"\xff\xff");
+
+        assert_eq!(result.unwrap().into_u32(), Some(100u32));
+    }
+
+    #[test]
+    fn percentage_is_valid_min() {
+        let mut ctx = Context::new(b"\x01\x00");
+        let mut parser = Percentage::new();
+        let result = parser.parse(&mut ctx);
+        assert!(result.is_ok());
+
+        assert_eq!(ctx.data.len(), 0);
+
+        assert_eq!(result.unwrap().into_u32(), Some(0u32));
+    }
+
+    #[test]
+    fn percentage_is_valid() {
+        let mut ctx = Context::new(b"\x01\x32\x00");
+        let mut parser = Percentage::new();
+        let result = parser.parse(&mut ctx).unwrap();
+        assert_eq!(result.into_u32().unwrap(), 50u32);
+    }
+
+    #[test]
+    fn percentage_is_invalid() {
+        let mut ctx = Context::new(b"\x01\x80");
+        let mut parser = Percentage::new();
+        let result = parser.parse(&mut ctx);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), ParsingError::InvalidPercentage(128));
+    }
+
+    #[test]
+    fn percentage_invalid_length() {
+        let mut ctx = Context::new(b"\xab\x80");
+        let mut parser = Percentage::new();
+        let result = parser.parse(&mut ctx);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), ParsingError::UnexpectedLength(0xab));
+    }
+
+    #[test]
+    fn percentage_input_too_short() {
+        let mut ctx = Context::new(b"\x01");
+        let mut parser = Percentage::new();
+        let result = parser.parse(&mut ctx);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), ParsingError::TooShort);
+    }
+
+    #[test]
+    fn text_input_too_short_when_empty() {
+        let mut ctx = Context::new(b"");
+        assert_eq!(
+            Text::new(2).parse(&mut ctx).unwrap_err(),
+            ParsingError::TooShort
+        );
+    }
+
+    #[test]
+    fn text_is_1_byte_string_and_advances() {
+        let mut ctx = Context::new(b"ab");
+        let mut parser = Text::new(1);
+        let result = parser.parse(&mut ctx);
+        assert!(result.is_ok());
+
+        let remainder = ctx.data;
+        assert_eq!(remainder.len(), 1);
+        assert_eq!(remainder[0], b'b');
+
+        let data = result.unwrap().into_string().unwrap();
+        assert_eq!(data, String::from("a"));
+    }
+
+    #[test]
+    fn text_fails_invalid_utf8() {
+        let mut ctx = Context::new(b"\xff\x00\xff\xff\xff\xff\xff\xff");
+        let mut parser = Text::new(8);
+        let result = parser.parse(&mut ctx);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParsingError::InvalidText(_) => (),
+            _ => panic!("text parse result should be a std::str::Utf8Error"),
+        }
+    }
+
+    #[test]
+    fn text_valid_string_less_than_max_size() {
+        let mut ctx = Context::new(b"this is a valid string");
+        let mut parser = Text::new(255);
+        let result = parser.parse(&mut ctx);
+
+        assert!(result.is_ok());
+        assert_eq!(ctx.data.len(), 0);
+
+        assert_eq!(
+            result.unwrap().into_string().unwrap(),
+            String::from("this is a valid string")
+        );
+    }
+
+    #[test]
+    fn text_includes_last_character() {
+        let mut ctx = Context::new(b"abcd");
+        let mut parser = Text::new(4);
+        let result = parser.parse(&mut ctx).unwrap();
+        assert_eq!(result.into_string().unwrap(), String::from("abcd"));
+    }
+
+    #[test]
+    fn parse_one_mac_ok() {
+        let mut ctx = Context::new(b"\x01\x0A\x0B\x0C\x0D\x0E\x0F");
+        let mut parser = Mac::new();
+        let result = parser.parse(&mut ctx).unwrap();
+        //consumed everything?
+        assert_eq!(ctx.data.len(), 0);
+
+        let macs = result.into_mac().unwrap();
+        //1 mac, equal to the one in the begining
+        assert_eq!(macs.len(), 1);
+        assert_eq!(macs[0], MacAddr6::new(0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F));
+    }
+
+    #[test]
+    fn empty_mac_fails() {
+        let mut ctx = Context::new(b"");
+        let mut parser = Mac::new();
+        let result = parser.parse(&mut ctx).unwrap_err();
+        assert_eq!(result, ParsingError::TooShort);
+    }
+
+    #[test]
+    fn short_mac() {
+        let mut ctx = Context::new(b"\x01\x0A\x0B\x0C\x0D\x0E");
+        let mut parser = Mac::new();
+        let result = parser.parse(&mut ctx);
+        assert_eq!(result.unwrap_err(), ParsingError::TooShort);
+    }
+
+    #[test]
+    fn parse_three_macs_with_remainder() {
+        let mut ctx = Context::new(b"\x03ABCDEF123456\xFF\xFF\xFF\xFF\xFF\xFFremainder");
+        let mut parser = Mac::new();
+        let result = parser.parse(&mut ctx).unwrap();
+        assert_eq!(ctx.data, b"remainder");
+
+        let macs = result.into_mac().unwrap();
+
+        assert_eq!(macs[0].as_ref(), b"ABCDEF");
+        assert_eq!(macs[1].as_ref(), b"123456");
+        assert!(macs[2].is_broadcast());
+    }
+
+    #[test]
+    fn less_mac_input_than_specified() {
+        //specifies 3 macs, but it's one byte short
+        let mut ctx = Context::new(b"\x03ABCDEF123456short");
+        let mut parser = Mac::new();
+        assert_eq!(parser.parse(&mut ctx).unwrap_err(), ParsingError::TooShort);
+    }
+
+    #[test]
+    fn sized_text_input_too_short_when_empty() {
+        let mut ctx = Context::new(b"");
+        assert_eq!(
+            SizedText::new(2).parse(&mut ctx).unwrap_err(),
+            ParsingError::TooShort
+        );
+    }
+
+    #[test]
+    fn sized_text_input_less_than_expected_length() {
+        let mut ctx = Context::new(b"\x06aaaa");
+        assert_eq!(
+            SizedText::new(255).parse(&mut ctx).unwrap_err(),
+            ParsingError::TooShort
+        );
+    }
+
+    #[test]
+    fn sized_text_input_exceeds_max_size() {
+        let mut ctx = Context::new(b"\x04abcd");
+        let result = SizedText::new(3).parse(&mut ctx).unwrap_err();
+        assert_eq!(result, ParsingError::UnexpectedLength(4));
+    }
+
+    #[test]
+    fn sized_text_valid_string_less_than_max_size_and_consume_input() {
+        let mut ctx = Context::new(b"\x04abcdefg");
+        let mut parser = SizedText::new(255);
+        let result = parser.parse(&mut ctx).unwrap();
+        assert_eq!(result.into_string().unwrap(), String::from("abcd"));
+
+        let remainder = ctx.data;
+        assert_eq!(remainder.len(), 3);
+        assert_eq!(remainder, String::from("efg").as_bytes());
+    }
+
+    #[test]
+    fn sized_text_fails_invalid_utf8() {
+        let mut invalid_input = Context::new(b"\x08\xff\x00\xff\xff\xff\xff\xff\xff");
+        let mut parser = SizedText::new(8);
+        let result = parser.parse(&mut invalid_input);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParsingError::InvalidText(_) => (),
+            _ => panic!("text parse result should be a std::str::Utf8Error"),
+        }
+    }
+
+    #[test]
+    fn sized_text_zero_length_data_suceeds_with_empty() {
+        let mut input = Context::new(b"\x00");
+        let mut parser = SizedText::new(8);
+        let result = parser.parse(&mut input).unwrap();
+        assert_eq!(result.into_string().unwrap(), "");
+    }
+
+    #[test]
+    fn exactly_sized_text_input_too_short_when_empty() {
+        let mut input = Context::new(b"");
+        assert_eq!(
+            SizedText::exact(0).parse(&mut input).unwrap_err(),
+            ParsingError::TooShort
+        );
+    }
+
+    #[test]
+    fn exactly_sized_text_input_exceeds_max_size() {
+        let mut input = Context::new(b"\x04abcd");
+        let result = SizedText::exact(3).parse(&mut input).unwrap_err();
+        assert_eq!(result, ParsingError::UnexpectedLength(4));
+    }
+
+    #[test]
+    fn exactly_sized_text_input_less_than_expected_length() {
+        let mut input = Context::new(b"\x04abcd");
+        let result = SizedText::exact(5).parse(&mut input).unwrap_err();
+        assert_eq!(result, ParsingError::UnexpectedLength(4));
+    }
+
+    #[test]
+    fn exactly_sized_text_valid_string_and_consumes_input() {
+        let mut ctx = Context::new(b"\x04abcd");
+        let mut parser = SizedText::exact(4);
+        let result = parser.parse(&mut ctx).unwrap();
+        assert_eq!(result.into_string().unwrap(), String::from("abcd"));
+        assert_eq!(ctx.data.len(), 0);
+    }
+
+    #[test]
+    fn exactly_sized_text_fails_invalid_utf8() {
+        let mut invalid_input = Context::new(b"\x08\xff\x00\xff\xff\xff\xff\xff\xff");
+        let mut parser = SizedText::exact(8);
+        let result = parser.parse(&mut invalid_input);
+        match result.unwrap_err() {
+            ParsingError::InvalidText(_) => (),
+            _ => panic!("text parse result should be a std::str::Utf8Error"),
+        }
+    }
+
+    #[test]
+    fn subtype2_parser_succeeds() {
+        let mut ctx = Context::new(b"\x01\x07\x01\x02\x02ABCDEF123456");
+        let mut parser = Connections::new();
+        let result = parser.parse(&mut ctx).unwrap();
+        let port_info: PerPortInfo = result.try_into().unwrap();
+        assert_eq!(port_info.interface, 7);
+        assert_eq!(port_info.port, 2);
+        assert_eq!(port_info.macs.len(), 2);
+        assert_eq!(port_info.macs[0].as_bytes(), b"ABCDEF");
+        assert_eq!(port_info.macs[1].as_bytes(), b"123456");
+    }
+
+    #[test]
+    fn subtype2_parser_fails_zero_size_number() {
+        let mut input = Context::new(b"\x00\x07\x01\x02\x02ABCDEF123456");
+        //--error here -------------^^^
+        let mut parser = Connections::new();
+        let result = parser.parse(&mut input);
+        assert_eq!(result.unwrap_err(), ParsingError::TooShort);
+    }
+
+    #[test]
+    fn subtype2_parser_fails_short_mac_data() {
+        let input = b"\x01\x07\x01\x02\x02ABCDEF12345";
+        //--error here, too short mac ---------------^
+        let mut ctx = Context::new(input);
+        let mut parser = Connections::new();
+        let result = parser.parse(&mut ctx);
+        assert_eq!(result.unwrap_err(), ParsingError::TooShort);
+    }
+
+    #[test]
+    fn subtype2_parser_succeeds_with_correct_remainder() {
+        let input = b"\x01\x03\x01\x09\x01BADFADremainder";
+        //--remainder --------------------------^
+        let mut ctx = Context::new(input);
+        let mut parser = Connections::new();
+        let result = parser.parse(&mut ctx).unwrap();
+        let port_info: PerPortInfo = result.try_into().unwrap();
+        assert_eq!(port_info.interface, 3);
+        assert_eq!(port_info.port, 9);
+        assert_eq!(port_info.macs.len(), 1);
+        assert_eq!(port_info.macs[0].as_bytes(), b"BADFAD");
+        assert_eq!(ctx.data, b"remainder");
     }
 }
