@@ -502,3 +502,17 @@ fn subtype2_parser_succeeds_with_correct_remainder() {
     let result = parser.parse(input).unwrap();
     assert_eq!(result, b"remainder");
 }
+
+#[test]
+fn subtype2_parser_fails_when_empty_buffer() {
+    let input = b"";
+    let mut parser = Connections::new();
+    assert_eq!(parser.parse(input).unwrap_err(), HtipError::TooShort);
+}
+
+#[test]
+fn subtype2_parses_long_numbers_and_zero_mac() {
+    let input = b"\x02\x01\xff\x04\x00\x00\x00\x01\x00remainder";
+    let mut parser = Connections::new();
+    let result = parser.parse(input).unwrap();
+}

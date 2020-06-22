@@ -520,8 +520,8 @@ impl Connections {
         //you need 3 parts, 2 sized numbers(1), and 1 mac
         // + the extractor, to generate a subtype 2 struct
         let comp = CompositeParser::new()
-            .with_part(Box::new(SizedNumber::new(NumberSize::One)))
-            .with_part(Box::new(SizedNumber::new(NumberSize::One)))
+            .with_part(Box::new(SizedNumber::new(NumberSize::Four)))
+            .with_part(Box::new(SizedNumber::new(NumberSize::Four)))
             .with_part(Box::new(Mac::new()))
             .extractor(|composite| {
                 let ppi = PerPortInfo {
@@ -539,16 +539,10 @@ impl Connections {
 
 impl Parser for Connections {
     fn parse<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], HtipError<'a>> {
-        //call the composite parsers's parse
-        if input[0] < 1 {
-            Err(HtipError::TooShort)
-        } else {
-            self.inner.parse(input)
-        }
+        self.inner.parse(input)
     }
 
     fn data(&self) -> HtipData {
-        //need to return HtipData::Connections(per_port_info: PerPortInfo)
         self.inner.data()
     }
 }
