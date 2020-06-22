@@ -481,17 +481,27 @@ pub struct Connections {
 
 impl Connections {
     pub fn new() -> Self {
-        //setup the inner composite parser here
-        //you need 3 parts, 2 sized numbers(1), and 1 mac
-        // + the extractor, to generate a subtype 2 struct
-        unimplemented!()
+        let comp = CompositeParser::new()
+            .with_part(Box::new(SizedNumber::new(NumberSize::Four)))
+            .with_part(Box::new(SizedNumber::new(NumberSize::Four)))
+            .with_part(Box::new(Mac::new()))
+            .extractor(|composite| {
+                let ppi = PerPortInfo {
+                    interface: composite.data.get(0).cloned().unwrap().into_u32().unwrap(),
+                    port: composite.data.get(1).cloned().unwrap().into_u32().unwrap(),
+                    macs: composite.data.get(2).cloned().unwrap().into_mac().unwrap(),
+                };
+
+                ParseData::Connections(ppi)
+            });
+
+        Connections { inner: comp }
     }
 }
 
 impl Parser for Connections {
     fn parse<'a, 's>(&mut self, input: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
-        //call the composite parsers's parse
-        unimplemented!()
+        self.inner.parse(input)
     }
 }
 
@@ -1019,5 +1029,19 @@ mod tests {
         assert_eq!(port_info.macs.len(), 1);
         assert_eq!(port_info.macs[0].as_bytes(), b"BADFAD");
         assert_eq!(ctx.data, b"remainder");
+    }
+
+    #[test]
+    fn subtype2_parser_fails_when_empty_buffer() {
+        let mut ctx = Context::new(b"");
+        let mut parser = Connections::new();
+        assert_eq!(parser.parse(&mut ctx).unwrap_err(), ParsingError::TooShort);
+    }
+    
+    #[test]
+    fn subtype2_parses_long_numbers_and_zero_mac() {
+        let mut ctx = Context::new(b"\x02\x01\xff\x04\x00\x00\x00\x01\x00remainder");
+        let mut parser = Connections::new();
+        let result = parser.parse(&mut ctx).unwrap();
     }
 }
