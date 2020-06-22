@@ -525,9 +525,9 @@ impl Connections {
             .with_part(Box::new(Mac::new()))
             .extractor(|composite| {
                 let ppi = PerPortInfo {
-                    interface: composite.data[0].into_u32().unwrap(),
-                    port: composite.data().into_u32().unwrap(),
-                    macs: composite.data().into_mac().unwrap(),
+                    interface: composite.parts.get(0).unwrap().data().into_u32().unwrap(),
+                    port: composite.parts.get(1).unwrap().data().into_u32().unwrap(),
+                    macs: composite.parts.get(2).unwrap().data().into_mac().unwrap(),
                 };
 
                 HtipData::Connections(ppi)
@@ -543,8 +543,7 @@ impl Parser for Connections {
         if input[0] < 1 {
             Err(HtipError::TooShort)
         } else {
-            self.inner.parse(input);
-            Ok(input)
+            self.inner.parse(input)
         }
     }
 
