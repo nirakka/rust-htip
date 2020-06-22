@@ -414,7 +414,7 @@ impl CompositeParser {
 
     pub fn extractor<F>(self, func: F) -> CompositeParserComplete
     where
-        F: 'static + Fn(&CompositeParserComplete) -> ParseData,
+        F: 'static + Fn(&mut Vec<ParseData>) -> ParseData,
     {
         CompositeParserComplete {
             parts: self.parts,
@@ -427,7 +427,7 @@ impl CompositeParser {
 pub struct CompositeParserComplete {
     parts: Vec<Box<dyn Parser>>,
     data: Vec<ParseData>,
-    func: Box<dyn Fn(&CompositeParserComplete) -> ParseData>,
+    func: Box<dyn Fn(&mut Vec<ParseData>) -> ParseData>,
 }
 
 impl Parser for CompositeParserComplete {
@@ -435,7 +435,7 @@ impl Parser for CompositeParserComplete {
         for parser in &mut self.parts {
             self.data.push(parser.parse(input)?);
         }
-        Ok((self.func)(&self))
+        Ok((self.func)(&mut self.data))
     }
 }
 
@@ -485,11 +485,11 @@ impl Connections {
             .with_part(Box::new(SizedNumber::new(NumberSize::Four)))
             .with_part(Box::new(SizedNumber::new(NumberSize::Four)))
             .with_part(Box::new(Mac::new()))
-            .extractor(|composite| {
+            .extractor(|data| {
                 let ppi = PerPortInfo {
-                    interface: composite.data.get(0).cloned().unwrap().into_u32().unwrap(),
-                    port: composite.data.get(1).cloned().unwrap().into_u32().unwrap(),
-                    macs: composite.data.get(2).cloned().unwrap().into_mac().unwrap(),
+                    macs: data.pop().unwrap().into_mac().unwrap(),
+                    port: data.pop().unwrap().into_u32().unwrap(),
+                    interface: data.pop().unwrap().into_u32().unwrap(),
                 };
 
                 ParseData::Connections(ppi)
@@ -516,7 +516,7 @@ mod scratch {
             .with_part(Box::new(FixedSequence::new(b"abc".to_vec())))
             .with_part(Box::new(FixedSequence::new(b"abc".to_vec())))
             .with_part(Box::new(Percentage::new()))
-            .extractor(|cp| cp.data.last().cloned().unwrap());
+            .extractor(|data| data.pop().unwrap());
 
         let mut context = Context::new(b"\x01\x02abcabc\x01\x32");
         let result = comp.parse(&mut context);
@@ -1037,7 +1037,7 @@ mod tests {
         let mut parser = Connections::new();
         assert_eq!(parser.parse(&mut ctx).unwrap_err(), ParsingError::TooShort);
     }
-    
+
     #[test]
     fn subtype2_parses_long_numbers_and_zero_mac() {
         let mut ctx = Context::new(b"\x02\x01\xff\x04\x00\x00\x00\x01\x00remainder");
