@@ -633,12 +633,6 @@ mod tests {
         ];
         let mut ctx = Context::new(b"\x01\x0A\xFF\xFF\x04\xFF\xFF\xFE\x00");
 
-        //let mut slice = &input[..];
-
-        //let res: Result<(), ParsingError> = parsers.iter_mut().try_for_each(|parser| {
-        //    slice = parser.parse(slice).unwrap();
-        //    Ok(())
-        //});
         let result: Result<Vec<ParseData>, ParsingError> = parsers
             .iter_mut()
             .map(|parser| parser.parse(&mut ctx))

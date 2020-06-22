@@ -5,8 +5,6 @@ use std::collections::HashMap;
 
 const TTC_OUI: &[u8; 3] = b"\xe0\x27\x1a";
 
-type ParserCtor = fn() -> Box<dyn Parser>;
-
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 struct ParserKey {
     tlv_type: u8,
@@ -20,26 +18,26 @@ impl ParserKey {
 }
 
 pub struct Dispatcher {
-    //hash table with keys to parser constructors
-    parsers: HashMap<ParserKey, ParserCtor>,
+    //hash table with keys to parsers
+    parsers: HashMap<ParserKey, Box<dyn Parser>>,
     //ordered array of parser keys
     keys: Vec<ParserKey>,
 }
 
 impl Dispatcher {
-    fn register(&mut self, tlv_type: TlvType, key: Vec<u8>, ctor: fn() -> Box<dyn Parser>) {
+    fn register(&mut self, tlv_type: TlvType, key: Vec<u8>, parser: Box<dyn Parser>) {
         let key = ParserKey::new(tlv_type.into(), key);
-        self.parsers.insert(key.clone(), ctor);
+        self.parsers.insert(key.clone(), parser);
         match self.keys.binary_search(&key) {
             Ok(index) => panic!("key already present at: {} , key:{:?}", index, key),
             Err(index) => self.keys.insert(index, key),
         }
     }
 
-    fn register_htip(&mut self, key: Vec<u8>, ctor: fn() -> Box<dyn Parser>) {
+    fn register_htip(&mut self, key: Vec<u8>, parser: Box<dyn Parser>) {
         let mut prefix = TTC_OUI.to_vec();
         prefix.extend(key);
-        self.register(TlvType::Custom, prefix, ctor);
+        self.register(TlvType::Custom, prefix, parser);
     }
 
     fn empty() -> Self {
@@ -81,21 +79,21 @@ impl Dispatcher {
         self.key_index_from_tlv(tlv).map(|u| self.keys[u].clone())
     }
 
-    fn parser_from_key(&self, key: ParserKey) -> Box<dyn Parser> {
-        match self.parsers.get(&key) {
-            Some(ctor) => ctor(),
+    fn parser_from_key(&mut self, key: ParserKey) -> &mut Box<dyn Parser> {
+        match self.parsers.get_mut(&key) {
+            Some(parser) => parser,
             None => unimplemented!(),
         }
     }
 
-    pub fn parse_tlv<'a>(&self, tlv: &'a TLV) -> Result<ParseData, ParsingError<'a>> {
+    pub fn parse_tlv<'a>(&mut self, tlv: &'a TLV) -> Result<ParseData, ParsingError<'a>> {
         let key = self
             .parser_key_from_tlv(&tlv)
             .ok_or(ParsingError::Unknown)?;
 
         let skip = key.prefix.len();
 
-        let mut parser = self.parsers.get(&key).unwrap()();
+        let parser = self.parsers.get_mut(&key).unwrap();
         let mut context = Context::new(&tlv.value[skip..]);
         //TODO emit a warning somewhere if we have unconsumed data
         parser.parse(&mut context)
@@ -104,58 +102,64 @@ impl Dispatcher {
     pub fn new() -> Self {
         let mut instance = Dispatcher::empty();
         //this is "whatever stated in the first byte (maximum length 255)"
-        instance.register_htip(b"\x01\x01".to_vec(), || Box::new(SizedText::new(255)));
+        instance.register_htip(b"\x01\x01".to_vec(), Box::new(SizedText::new(255)));
         //this should be "exact length 6"
-        instance.register_htip(b"\x01\x02".to_vec(), || Box::new(SizedText::exact(6)));
+        instance.register_htip(b"\x01\x02".to_vec(), Box::new(SizedText::exact(6)));
         //this is "whatever stated in the first byte (maximum length 31)"
-        instance.register_htip(b"\x01\x03".to_vec(), || Box::new(SizedText::new(31)));
+        instance.register_htip(b"\x01\x03".to_vec(), Box::new(SizedText::new(31)));
         //subtype1 info4
-        instance.register_htip(b"\x01\x04".to_vec(), || Box::new(SizedText::new(31)));
+        instance.register_htip(b"\x01\x04".to_vec(), Box::new(SizedText::new(31)));
         //subtype1 info20
-        instance.register_htip(b"\x01\x20".to_vec(), || Box::new(Percentage::new()));
+        instance.register_htip(b"\x01\x20".to_vec(), Box::new(Percentage::new()));
         //subtype1 info21
-        instance.register_htip(b"\x01\x21".to_vec(), || Box::new(Percentage::new()));
+        instance.register_htip(b"\x01\x21".to_vec(), Box::new(Percentage::new()));
         //subtype1 info22
-        instance.register_htip(b"\x01\x22".to_vec(), || Box::new(Percentage::new()));
+        instance.register_htip(b"\x01\x22".to_vec(), Box::new(Percentage::new()));
         //subtype1 info23
-        instance.register_htip(b"\x01\x23".to_vec(), || {
-            Box::new(SizedNumber::new(NumberSize::Six))
-        });
+        instance.register_htip(
+            b"\x01\x23".to_vec(),
+            Box::new(SizedNumber::new(NumberSize::Six)),
+        );
         //subtype1 info24
-        instance.register_htip(b"\x01\x24".to_vec(), || {
-            Box::new(SizedNumber::new(NumberSize::One))
-        });
+        instance.register_htip(
+            b"\x01\x24".to_vec(),
+            Box::new(SizedNumber::new(NumberSize::One)),
+        );
         //subtype1 info25
-        instance.register_htip(b"\x01\x25".to_vec(), || {
-            Box::new(SizedNumber::new(NumberSize::One))
-        });
+        instance.register_htip(
+            b"\x01\x25".to_vec(),
+            Box::new(SizedNumber::new(NumberSize::One)),
+        );
         //subtype1 info26
-        instance.register_htip(b"\x01\x26".to_vec(), || {
-            Box::new(SizedNumber::new(NumberSize::One))
-        });
+        instance.register_htip(
+            b"\x01\x26".to_vec(),
+            Box::new(SizedNumber::new(NumberSize::One)),
+        );
         //subtype1 info27
-        instance.register_htip(b"\x01\x27".to_vec(), || {
-            Box::new(SizedNumber::new(NumberSize::One))
-        });
+        instance.register_htip(
+            b"\x01\x27".to_vec(),
+            Box::new(SizedNumber::new(NumberSize::One)),
+        );
         //subtype1 info50
-        instance.register_htip(b"\x01\x50".to_vec(), || Box::new(SizedText::new(63)));
+        instance.register_htip(b"\x01\x50".to_vec(), Box::new(SizedText::new(63)));
         //subtype1 info51
-        instance.register_htip(b"\x01\x51".to_vec(), || Box::new(Percentage::new()));
+        instance.register_htip(b"\x01\x51".to_vec(), Box::new(Percentage::new()));
         //subtype1 info52
-        instance.register_htip(b"\x01\x52".to_vec(), || Box::new(Percentage::new()));
+        instance.register_htip(b"\x01\x52".to_vec(), Box::new(Percentage::new()));
         //subtype1 info53
-        instance.register_htip(b"\x01\x53".to_vec(), || Box::new(Percentage::new()));
+        instance.register_htip(b"\x01\x53".to_vec(), Box::new(Percentage::new()));
         //subtype1 info54
-        instance.register_htip(b"\x01\x54".to_vec(), || Box::new(Percentage::new()));
+        instance.register_htip(b"\x01\x54".to_vec(), Box::new(Percentage::new()));
         //subtype1 info80
-        instance.register_htip(b"\x01\x80".to_vec(), || {
-            Box::new(SizedNumber::new(NumberSize::Two))
-        });
+        instance.register_htip(
+            b"\x01\x80".to_vec(),
+            Box::new(SizedNumber::new(NumberSize::Two)),
+        );
         //TODO: use a composite parser for this in the future
         //subtype1 info255
         //TODO: use composite parser for this
         //subtype 2
-        instance.register_htip(b"\x03".to_vec(), || Box::new(Mac::new()));
+        instance.register_htip(b"\x03".to_vec(), Box::new(Mac::new()));
 
         instance
     }
@@ -164,12 +168,11 @@ impl Dispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    //use crate::htip::*;
 
     #[test]
     fn api_test() {
         let mut dsp = Dispatcher::empty();
-        dsp.register_htip(b"\x01\x01".to_vec(), || Box::new(SizedText::new(255)));
+        dsp.register_htip(b"\x01\x01".to_vec(), Box::new(SizedText::new(255)));
     }
 
     #[test]
@@ -210,13 +213,13 @@ mod tests {
     #[should_panic]
     fn adding_key_twice_panics() {
         let mut dsp = Dispatcher::new();
-        dsp.register_htip(b"\x01\x01".to_vec(), || Box::new(SizedText::new(255)));
+        dsp.register_htip(b"\x01\x01".to_vec(), Box::new(SizedText::new(255)));
     }
 
     #[test]
     fn one_tlv_parse_succeeds() {
         let frame = b"\xfe\x0f\xe0\x27\x1a\x01\x01\x09123456789";
-        let dsp = Dispatcher::new();
+        let mut dsp = Dispatcher::new();
         //collect our two tlvs, and do stuff with them
         let tlvs = parse_frame(frame)
             .into_iter()
@@ -233,7 +236,7 @@ mod tests {
     fn simple_tlv_parse_succeeds() {
         let frame = b"\xfe\x0f\xe0\x27\x1a\x01\x01\x09123456789\
             \xfe\x0c\xe0\x27\x1a\x01\x02\x06OUIOUI";
-        let dsp = Dispatcher::new();
+        let mut dsp = Dispatcher::new();
         //collect our two tlvs, and do stuff with them
         let tlvs = parse_frame(frame)
             .into_iter()
