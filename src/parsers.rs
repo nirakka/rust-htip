@@ -1,6 +1,9 @@
-use super::ParsingError;
-use macaddr::MacAddr6;
+use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
+
+use macaddr::MacAddr6;
+
+use super::ParsingError;
 
 pub trait Parser {
     fn parse<'a, 's>(
@@ -141,17 +144,18 @@ pub enum NumberSize {
     Four,
     Five,
     Six,
+    Seven,
+    Eight,
 }
 
-///A parser for numbers of fixed size, up to four bytes
+///A parser for numbers that declare their sizes, with a known max size in bytes.
 pub struct SizedNumber {
     size: NumberSize,
-    value: u64,
 }
 
 impl SizedNumber {
     pub fn new(size: NumberSize) -> Self {
-        SizedNumber { size, value: 0 }
+        SizedNumber { size }
     }
 
     fn check_length(
@@ -166,11 +170,11 @@ impl SizedNumber {
         }
     }
 
-    fn data(&self) -> ParseData {
-        if self.size <= NumberSize::Four {
-            ParseData::U32(self.value as u32)
+    fn to_data(size: NumberSize, value: u64) -> ParseData {
+        if size <= NumberSize::Four {
+            ParseData::U32(value as u32)
         } else {
-            ParseData::U64(self.value)
+            ParseData::U64(value)
         }
     }
 }
@@ -199,7 +203,7 @@ impl Parser for SizedNumber {
         SizedNumber::check_length(self.size as usize, actual, input.len())?;
         //we have the size we expect, try to parse
         //this into a number
-        self.value = (0..actual).fold(0u64, |mut acc, index| {
+        let value = (0..actual).fold(0u64, |mut acc, index| {
             acc <<= 8;
             acc += input[index] as u64;
             acc
@@ -207,7 +211,7 @@ impl Parser for SizedNumber {
 
         //consume the bytes we used so far
         context.set(&input[actual..]);
-        Ok(self.data())
+        Ok(SizedNumber::to_data(self.size, value))
     }
 }
 
@@ -502,6 +506,40 @@ impl Connections {
 impl Parser for Connections {
     fn parse<'a, 's>(&mut self, input: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
         self.inner.parse(input)
+    }
+}
+
+pub struct Number {
+    expected_size: NumberSize,
+}
+
+impl Number {
+    pub fn new(expected_size: NumberSize) -> Self {
+        Number { expected_size }
+    }
+
+    fn check_length(&self, len: usize) -> Result<usize, ParsingError<'static>> {
+        let self_size = self.expected_size as usize;
+        match self_size.cmp(&len) {
+            Ordering::Less => Err(ParsingError::TooShort),
+            Ordering::Equal => Ok(len),
+            Ordering::Greater => Err(ParsingError::UnexpectedLength(len)),
+        }
+    }
+}
+
+impl Parser for Number {
+    fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
+        let input = ctx.data;
+        let size = self.check_length(input.len())?;
+        let value = (0..size).fold(0u64, |mut acc, index| {
+            acc <<= 8;
+            acc += input[index] as u64;
+            acc
+        });
+        //consume data
+        ctx.set(&input[size..]);
+        Ok(ParseData::U64(value))
     }
 }
 
