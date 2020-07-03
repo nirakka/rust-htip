@@ -41,6 +41,8 @@ pub enum ParseData {
     Mac(Vec<MacAddr6>),
     ///Subtype 2
     Connections(PerPortInfo),
+    ///typed data
+    TypedData(u8, Vec<u8>),
 }
 
 #[derive(Debug)]
@@ -170,7 +172,7 @@ impl SizedNumber {
         }
     }
 
-    fn to_data(size: NumberSize, value: u64) -> ParseData {
+    fn data(size: NumberSize, value: u64) -> ParseData {
         if size <= NumberSize::Four {
             ParseData::U32(value as u32)
         } else {
@@ -211,7 +213,7 @@ impl Parser for SizedNumber {
 
         //consume the bytes we used so far
         context.set(&input[actual..]);
-        Ok(SizedNumber::to_data(self.size, value))
+        Ok(SizedNumber::data(self.size, value))
     }
 }
 
@@ -540,6 +542,21 @@ impl Parser for Number {
         //consume data
         ctx.set(&input[size..]);
         Ok(ParseData::U64(value))
+    }
+}
+
+pub struct TypedData;
+
+impl TypedData {
+    pub fn new() -> Self {
+        TypedData {}
+    }
+}
+
+impl Parser for TypedData {
+    fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
+        //you need to return TypedBinary( type, data)
+        unimplemented!()
     }
 }
 
@@ -1081,5 +1098,38 @@ mod tests {
         let mut ctx = Context::new(b"\x02\x01\xff\x04\x00\x00\x00\x01\x00remainder");
         let mut parser = Connections::new();
         let result = parser.parse(&mut ctx).unwrap();
+    }
+
+    #[test]
+    fn typed_data_succeeds_and_consumes_minimum_data() {
+        let mut ctx = Context::new(b"\xff\x00");
+        let mut parser = TypedData::new();
+        let result = parser.parse(&mut ctx).unwrap();
+
+        //consumed data?
+        assert_eq!(ctx.data.len(), 0);
+        //is data what we expect?
+        if let ParseData::TypedData(t, data) = result {
+            assert_eq!(t, 255);
+            assert_eq!(data, b"\x00");
+        } else {
+            panic!("expecting ParseData::TypedData, got something else!");
+        }
+    }
+
+    #[test]
+    fn typed_data_returns_too_short_on_empty() {
+        let mut ctx = Context::new(b"");
+        let mut parser = TypedData::new();
+        let result = parser.parse(&mut ctx).unwrap_err();
+        assert_eq!(result, ParsingError::TooShort);
+    }
+
+    #[test]
+    fn typed_data_returns_too_short_on_one_byte() {
+        let mut ctx = Context::new(b"\xff");
+        let mut parser = TypedData::new();
+        let result = parser.parse(&mut ctx).unwrap_err();
+        assert_eq!(result, ParsingError::TooShort);
     }
 }

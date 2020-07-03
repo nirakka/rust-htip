@@ -101,6 +101,13 @@ impl Dispatcher {
 
     pub fn new() -> Self {
         let mut instance = Dispatcher::empty();
+        instance.register(TlvType::from(1u8), b"".to_vec(), Box::new(TypedData::new()));
+        instance.register(TlvType::from(2u8), b"".to_vec(), Box::new(TypedData::new()));
+        instance.register(
+            TlvType::from(3u8),
+            b"".to_vec(),
+            Box::new(Number::new(NumberSize::Two)),
+        );
         //this is "whatever stated in the first byte (maximum length 255)"
         instance.register_htip(b"\x01\x01".to_vec(), Box::new(SizedText::new(255)));
         //this should be "exact length 6"
@@ -179,14 +186,15 @@ mod tests {
     fn finds_key() {
         //type 127, length 16
         let frame = b"\xfe\x0f\xe0\x27\x1a\x01\x01\x09123456789\
-            \xfe\x0c\xe0\x27\x1a\x01\x02\x06OUIOUI";
+            \xfe\x0c\xe0\x27\x1a\x01\x02\x06OUIOUI\
+            \x02\x0a0123456789";
         let dsp = Dispatcher::new();
         //collect our two tlvs, and do stuff with them
         let tlvs = parse_frame(frame)
             .into_iter()
             .collect::<Result<Vec<TLV>, _>>()
             .unwrap();
-        assert_eq!(tlvs.len(), 2);
+        assert_eq!(tlvs.len(), 3);
         let key0 = dsp.parser_key_from_tlv(&tlvs[0]).unwrap();
         assert_eq!(key0.tlv_type, 127);
         assert_eq!(key0.prefix, b"\xe0\x27\x1a\x01\x01");
@@ -194,6 +202,10 @@ mod tests {
         let key1 = dsp.parser_key_from_tlv(&tlvs[1]).unwrap();
         assert_eq!(key1.tlv_type, 127);
         assert_eq!(key1.prefix, b"\xe0\x27\x1a\x01\x02");
+
+        let key2 = dsp.parser_key_from_tlv(&tlvs[2]).unwrap();
+        assert_eq!(key2.tlv_type, 1);
+        assert_eq!(key2.prefix, b"");
     }
 
     #[test]
