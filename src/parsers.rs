@@ -523,9 +523,9 @@ impl Number {
     fn check_length(&self, len: usize) -> Result<usize, ParsingError<'static>> {
         let self_size = self.expected_size as usize;
         match self_size.cmp(&len) {
-            Ordering::Less => Err(ParsingError::TooShort),
+            Ordering::Less => Err(ParsingError::UnexpectedLength(len)),
             Ordering::Equal => Ok(len),
-            Ordering::Greater => Err(ParsingError::UnexpectedLength(len)),
+            Ordering::Greater => Err(ParsingError::TooShort),
         }
     }
 }
@@ -1141,5 +1141,45 @@ mod tests {
         let mut parser = TypedData::new();
         let result = parser.parse(&mut ctx).unwrap_err();
         assert_eq!(result, ParsingError::TooShort);
+    }
+
+    #[test]
+    fn number_returns_too_short_on_empty() {
+        let mut ctx = Context::new(b"");
+        let mut parser = Number::new(NumberSize::Two);
+        let result = parser.parse(&mut ctx).unwrap_err();
+        assert_eq!(result, ParsingError::TooShort);
+    }
+
+    #[test]
+    fn number_returns_too_short_on_less_than_expected_size() {
+        let mut ctx = Context::new(b"\xff");
+        let mut parser = Number::new(NumberSize::Two);
+        let result = parser.parse(&mut ctx).unwrap_err();
+        assert_eq!(result, ParsingError::TooShort);
+    }
+
+    #[test]
+    fn number_returns_unexpected_length_error_on_over_expected_size() {
+        let mut ctx = Context::new(b"\xff\x01\x02");
+        let mut parser = Number::new(NumberSize::Two);
+        let result = parser.parse(&mut ctx).unwrap_err();
+        assert_eq!(result, ParsingError::UnexpectedLength(ctx.data.len()));
+    }
+
+    #[test]
+    fn number_succeeds_and_consumes_buffer() {
+        let mut ctx = Context::new(b"\xff\xff");
+        let mut parser = Number::new(NumberSize::Two);
+        let result = parser.parse(&mut ctx).unwrap();
+
+        // consumed data?
+        assert_eq!(ctx.data.len(), 0);
+
+        if let ParseData::U64(r) = result {
+            assert_eq!(r, 65535);
+        } else {
+            panic!("expecting ParseData::U64, got something else!");
+        }
     }
 }
