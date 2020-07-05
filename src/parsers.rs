@@ -556,7 +556,17 @@ impl TypedData {
 impl Parser for TypedData {
     fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
         //you need to return TypedBinary( type, data)
-        unimplemented!()
+        let input = ctx.data;
+
+        let t = input.get(0);
+        let data = input.get(1).ok_or(ParsingError::TooShort)?;
+
+        if input.is_empty() {
+            Err(ParsingError::TooShort)
+        } else {
+            ctx.set(&input[2..]);
+            Ok(ParseData::TypedData(*t.unwrap(), vec![data.to_be()]))
+        }
     }
 }
 
