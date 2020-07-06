@@ -522,10 +522,10 @@ impl Number {
 
     fn check_length(&self, len: usize) -> Result<usize, ParsingError<'static>> {
         let self_size = self.expected_size as usize;
-        match self_size.cmp(&len) {
-            Ordering::Less => Err(ParsingError::UnexpectedLength(len)),
+        match len.cmp(&self_size) {
+            Ordering::Less => Err(ParsingError::TooShort),
             Ordering::Equal => Ok(len),
-            Ordering::Greater => Err(ParsingError::TooShort),
+            Ordering::Greater => Err(ParsingError::UnexpectedLength(len)),
         }
     }
 }
@@ -555,18 +555,17 @@ impl TypedData {
 
 impl Parser for TypedData {
     fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
-        //you need to return TypedBinary( type, data)
         let input = ctx.data;
 
-        let t = input.get(0);
-        let data = input.get(1).ok_or(ParsingError::TooShort)?;
+        let t = input.get(0).ok_or(ParsingError::TooShort)?;
+        let _ = input.get(1).ok_or(ParsingError::TooShort)?;
 
-        if input.is_empty() {
-            Err(ParsingError::TooShort)
-        } else {
-            ctx.set(&input[2..]);
-            Ok(ParseData::TypedData(*t.unwrap(), vec![data.to_be()]))
-        }
+        //data is everything in the buffer
+        let data = input[1..].to_vec();
+
+        //consume everything
+        ctx.set(&input[input.len()..]);
+        Ok(ParseData::TypedData(*t, data))
     }
 }
 
@@ -1122,6 +1121,26 @@ mod tests {
         if let ParseData::TypedData(t, data) = result {
             assert_eq!(t, 255);
             assert_eq!(data, b"\x00");
+        } else {
+            panic!("expecting ParseData::TypedData, got something else!");
+        }
+    }
+
+    #[test]
+    fn typed_data_succeeds_and_consumes_arbitrary_data() {
+        let mut ctx = Context::new(b"\x0aThe quick brown fox jumps over the lazy dog");
+        let mut parser = TypedData::new();
+        let result = parser.parse(&mut ctx).unwrap();
+
+        //consumed all data?
+        assert_eq!(ctx.data.len(), 0);
+        //is data what we expect?
+        if let ParseData::TypedData(t, data) = result {
+            assert_eq!(t, 10);
+            assert_eq!(
+                std::str::from_utf8(&data).unwrap(),
+                "The quick brown fox jumps over the lazy dog"
+            );
         } else {
             panic!("expecting ParseData::TypedData, got something else!");
         }
