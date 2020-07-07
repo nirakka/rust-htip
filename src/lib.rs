@@ -1,6 +1,7 @@
 //TODO figure out proper visibilities
 pub mod dispatcher;
 pub mod parsers;
+pub mod subkeys;
 
 #[derive(Debug, PartialEq, Eq)]
 ///These are the errors that a basic parser may produce.

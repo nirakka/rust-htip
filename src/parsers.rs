@@ -1106,7 +1106,10 @@ mod tests {
     fn subtype2_parses_long_numbers_and_zero_mac() {
         let mut ctx = Context::new(b"\x02\x01\xff\x04\x00\x00\x00\x01\x00remainder");
         let mut parser = Connections::new();
-        let result = parser.parse(&mut ctx).unwrap();
+        let ppi: PerPortInfo = parser.parse(&mut ctx).unwrap().try_into().unwrap();
+        assert_eq!(ppi.interface, 511);
+        assert_eq!(ppi.port, 1);
+        assert_eq!(ppi.macs.len(), 0);
     }
 
     #[test]
