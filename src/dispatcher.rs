@@ -6,13 +6,13 @@ use std::cmp::Ordering;
 const TTC_OUI: &[u8; 3] = b"\xe0\x27\x1a";
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
-struct ParserKey {
+pub struct ParserKey {
     tlv_type: u8,
     prefix: Vec<u8>,
 }
 
 impl ParserKey {
-    fn new(tlv_type: u8, prefix: Vec<u8>) -> Self {
+    pub fn new(tlv_type: u8, prefix: Vec<u8>) -> Self {
         ParserKey { tlv_type, prefix }
     }
 
@@ -49,7 +49,7 @@ impl Dispatcher<'_> {
     fn add_parser(&mut self, tlv_type: TlvType, key: Vec<u8>, parser: Box<dyn Parser>) {
         let key = ParserKey::new(tlv_type.into(), key);
 
-        if let Some(_) = self.parsers.insert(key, parser) {
+        if self.parsers.insert(key, parser).is_some() {
             //Just panic here, we probably did a bad registration
             panic!("overwriting a parser!");
         }
@@ -67,13 +67,18 @@ impl Dispatcher<'_> {
         }
     }
 
-    pub fn parse_tlv<'a>(&mut self, tlv: &'a TLV) -> Result<ParseData, ParsingError<'a>> {
+    pub fn parse_tlv<'a, 's>(
+        &mut self,
+        tlv: &'a TLV<'s>,
+    ) -> (ParserKey, Result<ParseData, ParsingError<'s>>) {
+        //get key
         let key = self.parsers.key_of(tlv).unwrap();
+        //skipping data related to the key
         let skip = key.prefix.len();
         let parser = self.parsers.get_mut(&key).unwrap();
+        //setup context(take skip into account)
         let mut context = Context::new(&tlv.value[skip..]);
-        //TODO emit a warning somewhere if we have unconsumed data
-        parser.parse(&mut context)
+        (key.clone(), parser.parse(&mut context))
     }
 
     pub fn new() -> Self {
@@ -217,7 +222,7 @@ mod tests {
         assert_eq!(tlvs.len(), 1);
         assert_eq!(
             "123456789",
-            dsp.parse_tlv(&tlvs[0]).unwrap().into_string().unwrap()
+            dsp.parse_tlv(&tlvs[0]).1.unwrap().into_string().unwrap()
         );
     }
 
@@ -233,11 +238,11 @@ mod tests {
             .unwrap();
         assert_eq!(
             "123456789",
-            dsp.parse_tlv(&tlvs[0]).unwrap().into_string().unwrap()
+            dsp.parse_tlv(&tlvs[0]).1.unwrap().into_string().unwrap()
         );
         assert_eq!(
             "OUIOUI",
-            dsp.parse_tlv(&tlvs[1]).unwrap().into_string().unwrap()
+            dsp.parse_tlv(&tlvs[1]).1.unwrap().into_string().unwrap()
         );
     }
 }

@@ -3,6 +3,10 @@ pub mod dispatcher;
 pub mod parsers;
 pub mod subkeys;
 
+pub use dispatcher::ParserKey;
+pub use parsers::ParseData;
+use std::collections::HashMap;
+
 #[derive(Debug, PartialEq, Eq)]
 ///These are the errors that a basic parser may produce.
 ///The slice represents the original data that caused
@@ -132,6 +136,7 @@ pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
     })
 }
 
+///Parse a frame into a list of tlvs and stop when encountering an error
 pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
     let mut result = vec![];
     let mut input = frame;
@@ -157,10 +162,29 @@ pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
     result
 }
 
+pub struct Lint {
+    //TODO lints
+}
+
+pub struct FrameInfo<'a> {
+    pub tlvs: Vec<Result<TLV<'a>, ParsingError<'a>>>,
+    pub info: HashMap<dispatcher::ParserKey, Result<ParseData, ParsingError<'a>>>,
+    pub lints: HashMap<dispatcher::ParserKey, Lint>,
+}
+
+pub fn parse(frame: &[u8]) -> FrameInfo {
+    let tlvs = parse_frame(frame);
+    let mut dispatcher = dispatcher::Dispatcher::new();
+    let info = tlvs
+        .iter()
+        .filter_map(|result| result.as_ref().ok())
+        .map(|tlv| dispatcher.parse_tlv(tlv))
+        .collect::<HashMap<_, _>>();
+    let lints = HashMap::new();
+    //TODO linting
+    FrameInfo { tlvs, info, lints }
+}
+
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 }
