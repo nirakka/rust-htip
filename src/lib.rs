@@ -1,11 +1,12 @@
 //TODO figure out proper visibilities
 pub mod dispatcher;
+pub mod linters;
 pub mod parsers;
 pub mod subkeys;
 
-pub use dispatcher::ParserKey;
+pub use dispatcher::ParserKey as TlvKey;
+pub use linters::Lint;
 pub use parsers::ParseData;
-use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq)]
 ///These are the errors that a basic parser may produce.
@@ -162,14 +163,13 @@ pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
     result
 }
 
-pub struct Lint {
-    //TODO lints
-}
+pub type InfoEntry<'a> = (TlvKey, Result<ParseData, ParsingError<'a>>);
+pub type LintEntry = (TlvKey, Lint);
 
 pub struct FrameInfo<'a> {
     pub tlvs: Vec<Result<TLV<'a>, ParsingError<'a>>>,
-    pub info: HashMap<dispatcher::ParserKey, Result<ParseData, ParsingError<'a>>>,
-    pub lints: HashMap<dispatcher::ParserKey, Lint>,
+    pub info: Vec<InfoEntry<'a>>,
+    pub lints: Vec<LintEntry>,
 }
 
 pub fn parse(frame: &[u8]) -> FrameInfo {
@@ -179,12 +179,11 @@ pub fn parse(frame: &[u8]) -> FrameInfo {
         .iter()
         .filter_map(|result| result.as_ref().ok())
         .map(|tlv| dispatcher.parse_tlv(tlv))
-        .collect::<HashMap<_, _>>();
-    let lints = HashMap::new();
+        .collect();
+    let lints = vec![];
     //TODO linting
     FrameInfo { tlvs, info, lints }
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}

@@ -1,3 +1,4 @@
+use crate::linters::*;
 use crate::parsers::*;
 use crate::subkeys::*;
 use crate::*;
@@ -7,8 +8,8 @@ const TTC_OUI: &[u8; 3] = b"\xe0\x27\x1a";
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct ParserKey {
-    tlv_type: u8,
-    prefix: Vec<u8>,
+    pub tlv_type: u8,
+    pub prefix: Vec<u8>,
 }
 
 impl ParserKey {
@@ -43,6 +44,7 @@ impl LexOrder<TLV<'_>> for ParserKey {
 
 pub struct Dispatcher<'a> {
     parsers: Storage<ParserKey, TLV<'a>, Box<dyn Parser>>,
+    linters: Vec<Box<dyn Linter>>,
 }
 
 impl Dispatcher<'_> {
@@ -64,6 +66,7 @@ impl Dispatcher<'_> {
     fn empty() -> Self {
         Dispatcher {
             parsers: Storage::new(),
+            linters: vec![],
         }
     }
 
@@ -146,10 +149,11 @@ impl Dispatcher<'_> {
         );
         //TODO: use a composite parser for this in the future
         //subtype1 info255
-        //TODO: use composite parser for this
         //subtype 2
+        instance.add_htip_parser(b"\x02".to_vec(), Box::new(Connections::new()));
         instance.add_htip_parser(b"\x03".to_vec(), Box::new(Mac::new()));
 
+        instance.linters.push(Box::new(CheckEndTlv));
         instance
     }
 }
