@@ -1,14 +1,22 @@
+//TODO fix this `use everything` going on here
 use crate::linters::*;
 use crate::parsers::*;
 use crate::subkeys::*;
 use crate::*;
 use std::cmp::Ordering;
+use std::fmt;
 
 const TTC_OUI: &[u8; 3] = b"\xe0\x27\x1a";
 
+/// Unique combination of a tlv type and a binary prefix. If a TLV
+/// `matches` a parser key, the registered parser (if any) for that
+/// key will be invoked.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct ParserKey {
+    /// type of tlv
     pub tlv_type: u8,
+    /// binary prefix that matches the begining of the contents of
+    /// the tlv
     pub prefix: Vec<u8>,
 }
 
@@ -33,6 +41,20 @@ impl ParserKey {
     }
 }
 
+impl fmt::Display for ParserKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "T0x{:x}P{}",
+            self.tlv_type,
+            self.prefix
+                .iter()
+                .map(|byte| format!("{:02x}", byte))
+                .collect::<String>()
+        )
+    }
+}
+
 impl LexOrder<TLV<'_>> for ParserKey {
     fn lex_cmp(&self, other: &TLV<'_>) -> Ordering {
         match self.tlv_type.cmp(&other.tlv_type().into()) {
@@ -40,6 +62,56 @@ impl LexOrder<TLV<'_>> for ParserKey {
             other => other,
         }
     }
+}
+
+pub fn parse_as_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
+    //if input length less than 2
+    //it's a too short error
+    if input.len() < 2 {
+        return Result::Err(ParsingError::TooShort);
+    }
+
+    //compute length
+    let high_bit = ((input[0] as usize) & 0x1usize) << 8;
+    let length = high_bit + (input[1] as usize);
+
+    //check if lenght is too short
+    if length > input.len() {
+        return Result::Err(ParsingError::TooShort);
+    }
+
+    Result::Ok(TLV::new(
+        //compute type
+        TlvType::from(input[0] >> 1),
+        length,
+        &input[2..2 + length],
+    ))
+}
+
+///Parse a frame into a list of tlvs, stop on error
+pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
+    let mut result = vec![];
+    let mut input = frame;
+
+    while !input.is_empty() {
+        match parse_as_tlv(input) {
+            Ok(tlv) => {
+                //calculate the new input
+                assert!(tlv.len() + 2 <= input.len());
+                input = &input[(tlv.len() + 2)..];
+                //save the tlv on the result vector
+                result.push(Ok(tlv));
+            }
+            Err(error) => {
+                //we encountered an error.
+                //push the erroro in the result vector
+                //break out of the parsing loop
+                result.push(Err(error));
+                break;
+            }
+        }
+    }
+    result
 }
 
 pub struct Dispatcher<'a> {
@@ -80,8 +152,26 @@ impl Dispatcher<'_> {
         let skip = key.prefix.len();
         let parser = self.parsers.get_mut(&key).unwrap();
         //setup context(take skip into account)
-        let mut context = Context::new(&tlv.value[skip..]);
+        let mut context = Context::new(&tlv.value()[skip..]);
         (key.clone(), parser.parse(&mut context))
+    }
+
+    pub fn lint(&self, info: &[InfoEntry<'_>]) -> Vec<LintEntry> {
+        self.linters
+            .iter()
+            .flat_map(|linter| linter.lint(info))
+            .collect()
+    }
+
+    pub fn parse<'a>(&mut self, frame: &'a [u8]) -> FrameInfo<'a> {
+        let tlvs = parse_frame(frame);
+        let info = tlvs
+            .iter()
+            .filter_map(|result| result.as_ref().ok())
+            .map(|tlv| self.parse_tlv(tlv))
+            .collect::<Vec<_>>();
+        let lints = self.lint(&info);
+        FrameInfo { tlvs, info, lints }
     }
 
     pub fn new() -> Self {
@@ -155,6 +245,108 @@ impl Dispatcher<'_> {
 
         instance.linters.push(Box::new(CheckEndTlv));
         instance
+    }
+}
+#[cfg(test)]
+mod parse_tests {
+    use super::*;
+    use crate::ParsingError;
+
+    #[test]
+    fn parsing_empty_input_returns_too_short() {
+        let input = &[];
+        assert_eq!(parse_as_tlv(input).err(), Some(ParsingError::TooShort));
+    }
+
+    #[test]
+    fn parsing_1_byte_buffer_is_short() {
+        let input = &[b'1'];
+        assert_eq!(
+            parse_as_tlv(input).expect_err("result is not ParsingError::TooShort"),
+            ParsingError::TooShort
+        );
+    }
+
+    #[test]
+    fn parsing_2_byte_buffer_with_no_value_is_short() {
+        let input = &[1, 1];
+        assert_eq!(
+            parse_as_tlv(input).expect_err("result is not ParsingError::TooShort"),
+            ParsingError::TooShort
+        );
+    }
+
+    #[test]
+    fn parsing_2_byte_end_of_lldpdu_is_ok() {
+        let input = &[0, 0];
+        if let Ok(tlv) = parse_as_tlv(input) {
+            assert_eq!(tlv.len(), 0);
+            assert_eq!(tlv.tlv_type(), TlvType::End);
+            assert_eq!(tlv.value(), &[]);
+        } else {
+            panic!("Parse result should be Ok(), with zero len, and zero value");
+        }
+    }
+
+    #[test]
+    fn parsing_max_length_tlv_all_zeroes_and_type_is_chassis_id() {
+        let input = &mut [0b0; 514];
+        input[0] = 3u8;
+        input[1] = 255u8;
+        if let Ok(tlv) = parse_as_tlv(input) {
+            assert_eq!(tlv.len(), 511);
+            assert_eq!(tlv.tlv_type(), TlvType::ChassisID);
+            assert_eq!(tlv.value(), vec![0u8; 511].as_slice());
+        } else {
+            panic!("Parse result should be Ok(), with 511 len and 511 value");
+        }
+    }
+
+    #[test]
+    fn parse_frame_with_one_tlv() {
+        let frame = &[0, 0];
+        let result = parse_frame(frame);
+        assert!(result.len() == 1, "result length is not 1");
+        let res_tlv = result[0]
+            .as_ref()
+            .expect("an end tlv should be present here");
+        assert_eq!(res_tlv.tlv_type(), TlvType::End);
+    }
+
+    #[test]
+    fn parse_frame_with_two_tlv() {
+        let frame = &[2, 4, b'a', b'b', b'c', b'd', 0, 0];
+        let mut result = parse_frame(frame);
+        assert_eq!(result.len(), 2);
+        //end tlv here
+        let tlv = result.pop().unwrap().expect("end tlv should be here");
+        assert_eq!(tlv.tlv_type(), TlvType::End);
+
+        let tlv = result
+            .pop()
+            .unwrap()
+            .expect("chassis id tlv should be here");
+        assert_eq!(tlv.tlv_type(), TlvType::ChassisID);
+        let expected_value = b"abcd";
+        assert_eq!(tlv.len(), expected_value.len());
+        assert_eq!(tlv.value(), expected_value);
+    }
+
+    #[test]
+    fn parse_frame_3tlvs_last_one_error() {
+        let frame = b"\x02\x03123\x04\x0512345\x03\x1ftoo short";
+        let mut tlvs = parse_frame(frame);
+        assert_eq!(tlvs.pop().unwrap().unwrap_err(), ParsingError::TooShort);
+        let second_tlv = tlvs.pop().unwrap().unwrap();
+        assert_eq!(second_tlv.value(), b"12345");
+        assert_eq!(second_tlv.len(), 5);
+    }
+
+    #[test]
+    fn parse_frame_stops_parsing_after_error() {
+        let frame = b"\x02\x03123\x04\x0512345\x03\x1ftoo short\x00\x00";
+        let tlvs = parse_frame(frame);
+        assert_eq!(tlvs.len(), 3);
     }
 }
 

@@ -1,12 +1,23 @@
 //TODO figure out proper visibilities
+/// Organize parsers & linters into a single unit
 pub mod dispatcher;
+/// A collection of linters that check the contents of parsed information
+/// for irregularities
 pub mod linters;
+/// A collection of parsers that check the contents of tlvs for structural
+/// integrity and extract pieces of parsed information
 pub mod parsers;
-pub mod subkeys;
+mod subkeys;
+/// Type-Length-Value types
+pub mod tlv;
 
 pub use dispatcher::ParserKey as TlvKey;
+pub use dispatcher::{parse_frame, Dispatcher};
 pub use linters::Lint;
 pub use parsers::ParseData;
+pub use tlv::{TlvType, TLV};
+
+use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
 ///These are the errors that a basic parser may produce.
@@ -27,162 +38,73 @@ pub enum ParsingError<'a> {
     Unknown,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum TlvType {
-    End,
-    ChassisID,
-    PortID,
-    TimeToLive,
-    PortDescritpion,
-    SystemName,
-    SystemDescription,
-    SystemCapabilities,
-    ManagementAddress,
-    Reserved(u8),
-    Custom,
-    Invalid(u8),
-}
-
-impl TlvType {
-    pub fn as_byte(&self) -> u8 {
-        match self {
-            TlvType::End => 0,
-            TlvType::ChassisID => 1,
-            TlvType::PortID => 2,
-            TlvType::TimeToLive => 3,
-            TlvType::PortDescritpion => 4,
-            TlvType::SystemName => 5,
-            TlvType::SystemDescription => 6,
-            TlvType::SystemCapabilities => 7,
-            TlvType::ManagementAddress => 8,
-            TlvType::Reserved(x) => *x,
-            TlvType::Custom => 127,
-            TlvType::Invalid(x) => *x,
-        }
-    }
-}
-
-impl From<u8> for TlvType {
-    fn from(byte: u8) -> Self {
-        match byte {
-            0u8 => TlvType::End,
-            1u8 => TlvType::ChassisID,
-            2u8 => TlvType::PortID,
-            3u8 => TlvType::TimeToLive,
-            4u8 => TlvType::PortDescritpion,
-            5u8 => TlvType::SystemName,
-            6u8 => TlvType::SystemDescription,
-            7u8 => TlvType::SystemCapabilities,
-            8u8 => TlvType::ManagementAddress,
-            9u8..=126u8 => TlvType::Reserved(byte),
-            127u8 => TlvType::Custom,
-            128u8..=255u8 => TlvType::Invalid(byte),
-        }
-    }
-}
-
-impl From<TlvType> for u8 {
-    fn from(source: TlvType) -> u8 {
-        source.as_byte()
-    }
-}
-
-#[derive(Debug)]
-pub struct TLV<'a> {
-    ttype: TlvType,
-    length: usize,
-    value: &'a [u8],
-}
-
-impl TLV<'_> {
-    pub fn tlv_type(&self) -> TlvType {
-        self.ttype
-    }
-
-    pub fn len(&self) -> usize {
-        self.length
-    }
-
-    pub fn value(&self) -> &[u8] {
-        &self.value
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.value.is_empty()
-    }
-}
-
-pub fn parse_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
-    //if input length less than 2
-    //it's a too short error
-    if input.len() < 2 {
-        return Result::Err(ParsingError::TooShort);
-    }
-
-    //compute length
-    let high_bit = ((input[0] as usize) & 0x1usize) << 8;
-    let length = high_bit + (input[1] as usize);
-
-    //check if lenght is too short
-    if length > input.len() {
-        return Result::Err(ParsingError::TooShort);
-    }
-
-    Result::Ok(TLV {
-        //compute type
-        ttype: TlvType::from(input[0] >> 1),
-        length,
-        //we have to clone the value
-        value: &input[2..2 + length],
-    })
-}
-
-///Parse a frame into a list of tlvs and stop when encountering an error
-pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
-    let mut result = vec![];
-    let mut input = frame;
-
-    while !input.is_empty() {
-        match parse_tlv(input) {
-            Ok(tlv) => {
-                //calculate the new input
-                assert!(tlv.length + 2 <= input.len());
-                input = &input[(tlv.len() + 2)..];
-                //save the tlv on the result vector
-                result.push(Ok(tlv));
-            }
-            Err(error) => {
-                //we encountered an error.
-                //push the erroro in the result vector
-                //break out of the parsing loop
-                result.push(Err(error));
-                break;
-            }
-        }
-    }
-    result
-}
-
+/// Represent the parsing result for the tlv indicated by key
 pub type InfoEntry<'a> = (TlvKey, Result<ParseData, ParsingError<'a>>);
-pub type LintEntry = (TlvKey, Lint);
 
-pub struct FrameInfo<'a> {
-    pub tlvs: Vec<Result<TLV<'a>, ParsingError<'a>>>,
-    pub info: Vec<InfoEntry<'a>>,
-    pub lints: Vec<LintEntry>,
+/// A lint entry associated with a frame
+pub struct LintEntry {
+    /// Lint type
+    pub lint: Lint,
+    /// Related tlv&prefix
+    pub tlv_key: Option<TlvKey>,
+    /// Any additional info, used to customize error message
+    pub extra_info: Option<String>,
 }
 
-pub fn parse(frame: &[u8]) -> FrameInfo {
-    let tlvs = parse_frame(frame);
-    let mut dispatcher = dispatcher::Dispatcher::new();
-    let info = tlvs
-        .iter()
-        .filter_map(|result| result.as_ref().ok())
-        .map(|tlv| dispatcher.parse_tlv(tlv))
-        .collect();
-    let lints = vec![];
-    //TODO linting
-    FrameInfo { tlvs, info, lints }
+impl LintEntry {
+    /// Create a new LintEntry of the given type
+    pub fn new(lint: Lint) -> LintEntry {
+        LintEntry {
+            lint,
+            tlv_key: None,
+            extra_info: None,
+        }
+    }
+
+    pub fn with_tlv(self, key: TlvKey) -> LintEntry {
+        LintEntry {
+            tlv_key: Some(key),
+            ..self
+        }
+    }
+
+    pub fn with_extra_info(self, info: String) -> LintEntry {
+        LintEntry {
+            extra_info: Some(info),
+            ..self
+        }
+    }
+}
+
+impl fmt::Display for LintEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            vec![
+                Some(self.lint.to_string()),
+                self.tlv_key.clone().map(|tlvkey| tlvkey.to_string()),
+                self.extra_info.clone()
+            ]
+            .into_iter()
+            .filter(|info| info.is_some())
+            .map(|info| info.unwrap())
+            .collect::<Vec<_>>()
+            .join(", ")
+        )
+    }
+}
+
+/// A structure holding all the relevant information for a
+/// parsed HTIP frame.
+pub struct FrameInfo<'a> {
+    /// A vector with all the TLV parsing results. If the last result
+    /// is an error, there was a structural TLV problem
+    pub tlvs: Vec<Result<TLV<'a>, ParsingError<'a>>>,
+    /// Information extracted from each tlv, using the parsers
+    pub info: Vec<InfoEntry<'a>>,
+    /// Additional check results performed by the linters
+    pub lints: Vec<LintEntry>,
 }
 
 #[cfg(test)]

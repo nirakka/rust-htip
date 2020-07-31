@@ -14,9 +14,12 @@ lazy_static! {
 
 static NODESC: &str = "No Description";
 
+/// Type of a lint
 #[derive(PartialEq, Eq, Hash)]
 pub enum Lint {
+    /// A warning; althoug irregular it can still be used
     Warning(u8),
+    /// Represents a clear violation of a rule in the specification
     Error(u8),
 }
 
@@ -29,22 +32,29 @@ impl fmt::Display for Lint {
     }
 }
 
+/// Checks for abnormal content in parsed information
 pub trait Linter {
-    fn lint(&self, info: &[InfoEntry<'_>]) -> Vec<Lint>;
+    /// Check the supplied info entries for abnormal content
+    /// # Arguments
+    ///
+    /// * `info` - A collection of pieces of information, parsed
+    /// from tlvs, which preserve their original order
+    fn lint(&self, info: &[InfoEntry<'_>]) -> Vec<LintEntry>;
 }
 
+/// Linter that checks if an End TLV is present
 pub struct CheckEndTlv;
 
 impl Linter for CheckEndTlv {
-    fn lint(&self, info: &[InfoEntry<'_>]) -> Vec<Lint> {
+    fn lint(&self, info: &[InfoEntry<'_>]) -> Vec<LintEntry> {
         let mut res = vec![];
         match info.last() {
             //no end tlv
-            None => res.push(Lint::Error(1)),
+            None => res.push(LintEntry::new(Lint::Error(1))),
             Some(entry) => {
                 if entry.0.tlv_type != 0 {
                     //last tlv is not end tlv
-                    res.push(Lint::Error(1));
+                    res.push(LintEntry::new(Lint::Error(1)))
                 }
             }
         }
