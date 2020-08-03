@@ -42,14 +42,14 @@ pub trait Linter {
     ///
     /// * `info` - A collection of pieces of information, parsed
     /// from tlvs, which preserve their original order
-    fn lint(&self, info: &[InfoEntry<'_>]) -> Vec<LintEntry>;
+    fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry>;
 }
 
 /// Linter that checks if an End TLV is present
 pub struct CheckEndTlv;
 
 impl Linter for CheckEndTlv {
-    fn lint(&self, info: &[InfoEntry<'_>]) -> Vec<LintEntry> {
+    fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
         let mut res = vec![];
         match info.last() {
             //no end tlv
@@ -96,8 +96,8 @@ impl InvalidChars {
 }
 
 impl Linter for InvalidChars {
-    fn lint(&self, info: &[InfoEntry<'_>]) -> Vec<LintEntry> {
-        vec!()
+    fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
+        vec![]
         //TODO complete this!
         //for all tlvs
         //...if we know the tlv
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn check_end_tlv_lints_on_wrong_last_entry() {
-        let entries = vec![(TlvKey::new(1, vec![]), Ok(ParseData::Null))];
+        let entries = vec![(TlvKey::new(1, vec![]), ParseData::Null)];
         let linter = CheckEndTlv;
         let result = linter.lint(&entries);
         assert_eq!(result.len(), 1);
@@ -133,7 +133,7 @@ mod tests {
 
     #[test]
     fn check_end_tlv_doesnt_lint_on_correct_last_entry() {
-        let entries = vec![(TlvKey::new(0, vec![]), Ok(ParseData::Null))];
+        let entries = vec![(TlvKey::new(0, vec![]), ParseData::Null)];
         let linter = CheckEndTlv;
         let result = linter.lint(&entries);
         assert_eq!(result.len(), 0);
@@ -144,9 +144,9 @@ mod tests {
         let entries = vec![
             (
                 TlvKey::htip(b"\x01\x01".to_vec()),
-                Ok(ParseData::Text("man_id\x00".to_string())),
+                ParseData::Text("man_id\x00".to_string()),
             ),
-            (TlvKey::new(0, b"".to_vec()), Ok(ParseData::Null)),
+            (TlvKey::new(0, b"".to_vec()), ParseData::Null),
         ];
         let linter = InvalidChars::new();
         let result = linter.lint(&entries);
@@ -166,15 +166,15 @@ mod tests {
             //this is correct, it should not trigger an error!
             (
                 TlvKey::htip(b"\x01\x01".to_vec()),
-                Ok(ParseData::Text("device_category".to_string())),
+                ParseData::Text("device_category".to_string()),
             ),
             //this triggers error, all letters are wrong!
             (
                 TlvKey::htip(b"\x01\x02".to_vec()),
-                Ok(ParseData::Text("WRONG\x00".to_string())),
+                ParseData::Text("WRONG\x00".to_string()),
             ),
             //this is ok
-            (TlvKey::new(0, b"".to_vec()), Ok(ParseData::Null)),
+            (TlvKey::new(0, b"".to_vec()), ParseData::Null),
         ];
         let linter = InvalidChars::new();
         let result = linter.lint(&entries);
@@ -194,20 +194,18 @@ mod tests {
             //this is correct, it should not trigger an error!
             (
                 TlvKey::htip(b"\x01\x01".to_vec()),
-                Ok(ParseData::Text("device_category".to_string())),
+                ParseData::Text("device_category".to_string()),
             ),
             //this triggers error, all letters are wrong!
             (
                 TlvKey::htip(b"\x01\x02".to_vec()),
-                Ok(ParseData::Text("WRONG\x00".to_string())),
+                ParseData::Text("WRONG\x00".to_string()),
             ),
             //this is ok
-            (TlvKey::new(0, b"".to_vec()), Ok(ParseData::Null)),
+            (TlvKey::new(0, b"".to_vec()), ParseData::Null),
             (
                 TlvKey::htip(b"\x01\x50".to_vec()),
-                Ok(ParseData::Text(
-                    "status with underscores _ and #sharps and null\x00".to_string(),
-                )),
+                ParseData::Text("status with underscores _ and #sharps and null\x00".to_string()),
             ),
         ];
         let linter = InvalidChars::new();

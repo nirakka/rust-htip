@@ -38,9 +38,6 @@ pub enum ParsingError<'a> {
     Unknown,
 }
 
-/// Represent the parsing result for the tlv indicated by key
-pub type InfoEntry<'a> = (TlvKey, Result<ParseData, ParsingError<'a>>);
-
 /// A lint entry associated with a frame
 pub struct LintEntry {
     /// Lint type
@@ -95,6 +92,11 @@ impl fmt::Display for LintEntry {
     }
 }
 
+/// Represent the parsing data result for the tlv indicated by key
+pub type InfoEntry = (TlvKey, ParseData);
+/// Represent the parsing error for the tlv indicated by key
+pub type ErrorEntry<'a> = (TlvKey, ParsingError<'a>);
+
 /// A structure holding all the relevant information for a
 /// parsed HTIP frame.
 pub struct FrameInfo<'a> {
@@ -102,7 +104,9 @@ pub struct FrameInfo<'a> {
     /// is an error, there was a structural TLV problem
     pub tlvs: Vec<Result<TLV<'a>, ParsingError<'a>>>,
     /// Information extracted from each tlv, using the parsers
-    pub info: Vec<InfoEntry<'a>>,
+    pub info: Vec<InfoEntry>,
+    /// Errors encountered by the parsers
+    pub errors: Vec<ErrorEntry<'a>>,
     /// Additional check results performed by the linters
     pub lints: Vec<LintEntry>,
 }

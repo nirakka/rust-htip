@@ -168,7 +168,7 @@ impl Dispatcher<'_> {
         (key.clone(), parser.parse(&mut context))
     }
 
-    pub fn lint(&self, info: &[InfoEntry<'_>]) -> Vec<LintEntry> {
+    pub fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
         self.linters
             .iter()
             .flat_map(|linter| linter.lint(info))
@@ -177,13 +177,30 @@ impl Dispatcher<'_> {
 
     pub fn parse<'a>(&mut self, frame: &'a [u8]) -> FrameInfo<'a> {
         let tlvs = parse_frame(frame);
-        let info = tlvs
+        let (info, errors) = tlvs
             .iter()
             .filter_map(|result| result.as_ref().ok())
             .map(|tlv| self.parse_tlv(tlv))
+            //split into ok data and parsing errors
+            .partition::<Vec<_>, _>(|(_tlv, res)| res.is_ok());
+        //unwrap data
+        let info = info
+            .into_iter()
+            .map(|(tlv, res)| (tlv, res.unwrap()))
             .collect::<Vec<_>>();
+        //unwrap errors
+        let errors = errors
+            .into_iter()
+            .map(|(tlv, err)| (tlv, err.unwrap_err()))
+            .collect::<Vec<_>>();
+
         let lints = self.lint(&info);
-        FrameInfo { tlvs, info, lints }
+        FrameInfo {
+            tlvs,
+            info,
+            errors,
+            lints,
+        }
     }
 
     pub fn new() -> Self {
