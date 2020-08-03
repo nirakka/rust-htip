@@ -25,6 +25,18 @@ impl ParserKey {
         ParserKey { tlv_type, prefix }
     }
 
+    pub fn htip(prefix: Vec<u8>) -> Self {
+        let prefix = TTC_OUI
+            .to_vec()
+            .into_iter()
+            .chain(prefix.into_iter())
+            .collect();
+        ParserKey {
+            tlv_type: TlvType::Custom.into(),
+            prefix,
+        }
+    }
+
     fn cmp_contents(key_val: &[u8], tlv_val: &[u8]) -> Ordering {
         let diff = key_val
             .iter()
@@ -176,6 +188,7 @@ impl Dispatcher<'_> {
 
     pub fn new() -> Self {
         let mut instance = Dispatcher::empty();
+        instance.add_parser(TlvType::from(0u8), b"".to_vec(), Box::new(NoData));
         instance.add_parser(TlvType::from(1u8), b"".to_vec(), Box::new(TypedData::new()));
         instance.add_parser(TlvType::from(2u8), b"".to_vec(), Box::new(TypedData::new()));
         instance.add_parser(

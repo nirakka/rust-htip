@@ -43,6 +43,8 @@ pub enum ParseData {
     Connections(PerPortInfo),
     ///typed data
     TypedData(u8, Vec<u8>),
+    ///No data (end tlv)
+    Null,
 }
 
 #[derive(Debug)]
@@ -566,6 +568,18 @@ impl Parser for TypedData {
         //consume everything
         ctx.set(&input[input.len()..]);
         Ok(ParseData::TypedData(*t, data))
+    }
+}
+
+pub struct NoData;
+
+impl Parser for NoData {
+    fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
+        if ctx.data.is_empty() {
+            Ok(ParseData::Null)
+        } else {
+            Err(ParsingError::UnexpectedLength(ctx.data.len()))
+        }
     }
 }
 
