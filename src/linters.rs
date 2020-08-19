@@ -85,19 +85,43 @@ impl InvalidChars {
             //you insert a tuplet (tlvkey, allowed_chars_as_string)
             //
             //TODO machine information id = 2
+            (
+                TlvKey::htip(b"\x01\x02".to_vec()),
+                ('a'..'z')
+                    .chain('A'..'F')
+                    .chain('0'..'9')
+                    .collect::<String>(),
+            ),
             //TODO machine information id = 4 (same as ID 1? refactor!)
+            (
+                TlvKey::htip(b"\x01\x04".to_vec()),
+                ('a'..'z')
+                    .chain('A'..'Z')
+                    .chain('0'..'9')
+                    .chain(",-'()+./:=?;!*#@$_%".chars())
+                    .collect::<String>(),
+            ),
             //TODO machine information id = 50
+            (
+                TlvKey::htip(b"\x01\x50".to_vec()),
+                ('a'..'z')
+                    .chain('A'..'Z')
+                    .chain('0'..'9')
+                    .chain(",.?!/*+-".chars())
+                    .collect::<String>(),
+            )
             //TODO Double check, make sure we're not missing anything!
         ]
         .into_iter()
         .collect();
         InvalidChars { allowed }
     }
+
 }
 
 impl Linter for InvalidChars {
     fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
-        vec![]
+        let mut le = vec![];
         //TODO complete this!
         //for all tlvs
         //...if we know the tlv
@@ -106,6 +130,17 @@ impl Linter for InvalidChars {
         //... for each info_entry
         //return:  LintEntry::new(Lint::Warning(1))
         //                  .with_tlv(info_entry.0 (probably needs clone))
+
+        for i in info {
+            //self.allowed.iter().find();
+
+        }
+        println!("{:?}", info);
+        println!("{:?}", self.allowed);
+
+        le
+
+
     }
 }
 
