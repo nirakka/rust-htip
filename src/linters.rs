@@ -75,9 +75,9 @@ impl InvalidChars {
             //entry for machine information ID = 1
             (
                 TlvKey::htip(b"\x01\x01".to_vec()),
-                ('a'..'z')
-                    .chain('A'..'Z')
-                    .chain('0'..'9')
+                ('a'..='z')
+                    .chain('A'..='Z')
+                    .chain('0'..='9')
                     .chain(",-'()+./:=?;!*#@$_%".chars())
                     .collect::<String>(),
             ),
@@ -87,36 +87,29 @@ impl InvalidChars {
             //TODO machine information id = 2
             (
                 TlvKey::htip(b"\x01\x02".to_vec()),
-                ('a'..'z')
-                    .chain('A'..'F')
-                    .chain('0'..'9')
-                    .collect::<String>(),
+                ('A'..='F').chain('0'..='9').collect::<String>(),
             ),
             //TODO machine information id = 4 (same as ID 1? refactor!)
             (
                 TlvKey::htip(b"\x01\x04".to_vec()),
-                ('a'..'z')
-                    .chain('A'..'Z')
-                    .chain('0'..'9')
+                ('A'..='Z')
+                    .chain('0'..='9')
                     .chain(",-'()+./:=?;!*#@$_%".chars())
                     .collect::<String>(),
             ),
-            //TODO machine information id = 50
+            //TODO machine information id = 50 (hex= 0x32)
             (
-                TlvKey::htip(b"\x01\x50".to_vec()),
-                ('a'..'z')
-                    .chain('A'..'Z')
-                    .chain('0'..'9')
+                TlvKey::htip(b"\x01\x32".to_vec()),
+                ('A'..='Z')
+                    .chain('0'..='9')
                     .chain(",.?!/*+-".chars())
                     .collect::<String>(),
-            )
-            //TODO Double check, make sure we're not missing anything!
+            ), //TODO Double check, make sure we're not missing anything!
         ]
         .into_iter()
         .collect();
         InvalidChars { allowed }
     }
-
 }
 
 impl Linter for InvalidChars {
@@ -126,46 +119,40 @@ impl Linter for InvalidChars {
         //for all tlvs
         //...if we know the tlv
         //...check the contents
-        //
+
         //... for each info_entry
         //return:  LintEntry::new(Lint::Warning(1))
         //                  .with_tlv(info_entry.0 (probably needs clone))
 
         for i in info {
             let mut allow = self.allowed.get(&i.0);
-            
-            println!("{:?}", allow);
+
+            println!("allow: {:?}", allow);
             if allow.is_none() {
-                break;
+                //break;
+                //FIX: this was a break
+                continue;
             } else {
                 let allow = &allow.unwrap();
-            let cnt = i.1.clone().into_string().unwrap();
-            println!("{:?}", cnt);
-            println!("{:?}", allow);
+                let cnt = i.1.clone().into_string().unwrap();
+                println!("cnt: {:?}", cnt);
+                println!("allow_2 {:?}", allow);
 
-
-            // check the contents
-            for j in cnt.as_bytes() {
-                
-                let res = allow.as_bytes().iter().find(|&x| x == j);
-                if !res.is_some() {
-                    println!("wrong");
-                    let entry = LintEntry::new(Lint::Warning(1))
-                        .with_tlv(i.0.clone());
-                    le.push(entry);
-                    break;                
-
+                // check the contents
+                for j in cnt.as_bytes() {
+                    let res = allow.as_bytes().iter().find(|&x| x == j);
+                    if !res.is_some() {
+                        println!("wrong");
+                        let entry = LintEntry::new(Lint::Warning(1)).with_tlv(i.0.clone());
+                        le.push(entry);
+                        break;
+                    }
                 }
-
-
-            }
             }
         }
-        println!("{:?}", self.allowed);
-        
+        println!("allowed {:?}", self.allowed);
 
         le
-
     }
 }
 
@@ -264,7 +251,7 @@ mod tests {
             //this is ok
             (TlvKey::new(0, b"".to_vec()), ParseData::Null),
             (
-                TlvKey::htip(b"\x01\x50".to_vec()),
+                TlvKey::htip(b"\x01\x32".to_vec()),
                 ParseData::Text("status with underscores _ and #sharps and null\x00".to_string()),
             ),
         ];
@@ -283,7 +270,47 @@ mod tests {
                 .tlv_key
                 .as_ref()
                 .expect("The linter must put a tlv key in its result!"),
-            &TlvKey::htip(b"\x01\x50".to_vec())
+            &TlvKey::htip(b"\x01\x32".to_vec())
+        );
+    }
+
+    #[test]
+    fn invalid_chars_out_of_order_entries_and_others_succeeds() {
+        let entries = vec![
+            //error!
+            (
+                TlvKey::htip(b"\x01\x32".to_vec()),
+                ParseData::Text("status with underscores _ and #sharps and null\x00".to_string()),
+            ),
+            //this is ok
+            (TlvKey::new(0, b"".to_vec()), ParseData::Null),
+            //this triggers error, all letters are wrong!
+            (
+                TlvKey::htip(b"\x01\x02".to_vec()),
+                ParseData::Text("WRONG\x00".to_string()),
+            ),
+            //this is correct, it should not trigger an error!
+            (
+                TlvKey::htip(b"\x01\x01".to_vec()),
+                ParseData::Text("device_category".to_string()),
+            ),
+        ];
+        let linter = InvalidChars::new();
+        let result = linter.lint(&entries);
+        assert_eq!(result.len(), 2);
+        assert_eq!(
+            result[0]
+                .tlv_key
+                .as_ref()
+                .expect("The linter must put a tlv key in its result!"),
+            &TlvKey::htip(b"\x01\x32".to_vec())
+        );
+        assert_eq!(
+            result[1]
+                .tlv_key
+                .as_ref()
+                .expect("The linter must put a tlv key in its result!"),
+            &TlvKey::htip(b"\x01\x02".to_vec())
         );
     }
 }
