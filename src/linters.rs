@@ -125,24 +125,14 @@ impl Linter for InvalidChars {
         //                  .with_tlv(info_entry.0 (probably needs clone))
 
         for i in info {
-            let mut allow = self.allowed.get(&i.0);
+            let allow = self.allowed.get(&i.0);
 
-            println!("allow: {:?}", allow);
-            if allow.is_none() {
-                //break;
-                //FIX: this was a break
-                continue;
-            } else {
-                let allow = &allow.unwrap();
+            if let Some(allow) = allow {
+                let allow = &allow;
                 let cnt = i.1.clone().into_string().unwrap();
-                println!("cnt: {:?}", cnt);
-                println!("allow_2 {:?}", allow);
 
-                // check the contents
-                for j in cnt.as_bytes() {
-                    let res = allow.as_bytes().iter().find(|&x| x == j);
-                    if !res.is_some() {
-                        println!("wrong");
+                for _c in cnt.chars() {
+                    if !allow.contains(_c) {
                         let entry = LintEntry::new(Lint::Warning(1)).with_tlv(i.0.clone());
                         le.push(entry);
                         break;
@@ -150,7 +140,6 @@ impl Linter for InvalidChars {
                 }
             }
         }
-        println!("allowed {:?}", self.allowed);
 
         le
     }
