@@ -114,22 +114,18 @@ impl InvalidChars {
 
 impl Linter for InvalidChars {
     fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
-        let mut lints = vec![];
-        for entry in info {
-            if let Some(allowed_chars) = self.allowed.get(&entry.0) {
-                let data = entry.1.clone().into_string().unwrap();
-
-                for c in data.chars() {
-                    if !allowed_chars.contains(c) {
-                        let lint = LintEntry::new(Lint::Warning(1)).with_tlv(entry.0.clone());
-                        lints.push(lint);
-                        break;
-                    }
-                }
-            }
-        }
-
-        lints
+        info.iter()
+            .filter_map(|(entry_key, entry_pdata)| {
+                Some((self.allowed.get(entry_key)?, entry_key, entry_pdata))
+            })
+            .filter_map(|(allowed, key, data)| match data {
+                ParseData::Text(data) => data
+                    .chars()
+                    .find(|c| !allowed.contains(*c))
+                    .map(|_| LintEntry::new(Lint::Warning(1)).with_tlv(key.clone())),
+                _ => None, //never happening
+            })
+            .collect()
     }
 }
 
