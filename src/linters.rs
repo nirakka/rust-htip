@@ -114,34 +114,22 @@ impl InvalidChars {
 
 impl Linter for InvalidChars {
     fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
-        let mut le = vec![];
-        //TODO complete this!
-        //for all tlvs
-        //...if we know the tlv
-        //...check the contents
+        let mut lints = vec![];
+        for entry in info {
+            if let Some(allowed_chars) = self.allowed.get(&entry.0) {
+                let data = entry.1.clone().into_string().unwrap();
 
-        //... for each info_entry
-        //return:  LintEntry::new(Lint::Warning(1))
-        //                  .with_tlv(info_entry.0 (probably needs clone))
-
-        for i in info {
-            let allow = self.allowed.get(&i.0);
-
-            if let Some(allow) = allow {
-                let allow = &allow;
-                let cnt = i.1.clone().into_string().unwrap();
-
-                for _c in cnt.chars() {
-                    if !allow.contains(_c) {
-                        let entry = LintEntry::new(Lint::Warning(1)).with_tlv(i.0.clone());
-                        le.push(entry);
+                for c in data.chars() {
+                    if !allowed_chars.contains(c) {
+                        let lint = LintEntry::new(Lint::Warning(1)).with_tlv(entry.0.clone());
+                        lints.push(lint);
                         break;
                     }
                 }
             }
         }
 
-        le
+        lints
     }
 }
 
