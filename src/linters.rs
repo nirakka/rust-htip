@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 
-use crate::{InfoEntry, LintEntry, ParseData, ParsingError, TlvKey};
+use crate::{InfoEntry, LintEntry, ParseData, TlvKey};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -9,6 +9,12 @@ lazy_static! {
         vec![
             (Lint::Error(1), "No End TLV"),
             (Lint::Warning(1), "Invalid Characters"),
+            (Lint::Error(2), "Multiple Type 1 TLVs"),
+            (Lint::Error(3), "Invalid MAC in Type 1 TLV"),
+            (
+                Lint::Error(4),
+                "Type 1 TLV is neither MAC nor locally assigned",
+            ),
         ]
         .into_iter()
         .collect()
@@ -65,6 +71,7 @@ impl Linter for CheckEndTlv {
     }
 }
 
+///Linter that checks for the presence of invalid characters in various TLVs
 pub struct InvalidChars {
     allowed: HashMap<TlvKey, String>,
 }
@@ -72,7 +79,17 @@ pub struct InvalidChars {
 impl InvalidChars {
     pub fn new() -> Self {
         let allowed = vec![
-            //entry for machine information ID = 1
+            //entry for TLV type 4
+            (
+                TlvKey::new(4, vec![]),
+                "\x20-'()+,./:=?;!*#@$_%"
+                    .chars()
+                    .chain('a'..='z')
+                    .chain('A'..='Z')
+                    .chain('0'..='9')
+                    .collect::<String>(),
+            ),
+            //entry for HTIP machine information ID = 1
             (
                 TlvKey::htip(b"\x01\x01".to_vec()),
                 ('a'..='z')
@@ -81,15 +98,12 @@ impl InvalidChars {
                     .chain(",-'()+./:=?;!*#@$_%".chars())
                     .collect::<String>(),
             ),
-            //TODO add the entries below!
-            //you insert a tuplet (tlvkey, allowed_chars_as_string)
-            //
-            //TODO machine information id = 2
+            //HTIP machine information id = 2
             (
                 TlvKey::htip(b"\x01\x02".to_vec()),
                 ('A'..='F').chain('0'..='9').collect::<String>(),
             ),
-            //TODO machine information id = 4 (same as ID 1? refactor!)
+            //HTIP machine information id = 4 (same as ID 1?)
             (
                 TlvKey::htip(b"\x01\x04".to_vec()),
                 ('A'..='Z')
@@ -97,14 +111,14 @@ impl InvalidChars {
                     .chain(",-'()+./:=?;!*#@$_%".chars())
                     .collect::<String>(),
             ),
-            //TODO machine information id = 50 (hex= 0x32)
+            //HTIP machine information id = 50 (hex= 0x32)
             (
                 TlvKey::htip(b"\x01\x32".to_vec()),
                 ('A'..='Z')
                     .chain('0'..='9')
                     .chain(",.?!/*+-".chars())
                     .collect::<String>(),
-            ), //TODO Double check, make sure we're not missing anything!
+            ),
         ]
         .into_iter()
         .collect();
@@ -126,6 +140,24 @@ impl Linter for InvalidChars {
                 _ => None, //never happening
             })
             .collect()
+    }
+}
+
+///This linter is for TLV type 1 and it checks the following:
+/// 1. if more than one TLV type 1 is present issue error(2)
+/// 2. if chassis ID subtype == 4 then length must be 6 or 8,
+///     if not, issue error(3)
+/// 3. for all other subtypes, issue error (4)
+///
+/// Lookup page 27 in jj-300.00.v3.pdf
+///
+/// Don't forget to set the lint entry key to TlvKey::new(1, vec![])
+pub struct TLV1Linter;
+
+impl Linter for TLV1Linter {
+    fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
+        //TODO implement here
+        vec![]
     }
 }
 
@@ -171,6 +203,7 @@ mod tests {
         let linter = InvalidChars::new();
         let result = linter.lint(&entries);
         assert_eq!(result.len(), 1);
+        assert_eq!(result[0].lint, Lint::Warning(1));
         assert_eq!(
             result[0]
                 .tlv_key
@@ -285,5 +318,76 @@ mod tests {
                 .expect("The linter must put a tlv key in its result!"),
             &TlvKey::htip(b"\x01\x02".to_vec())
         );
+    }
+
+    #[test]
+    fn tlv1linter_multiple_tlvs_error() {
+        let entries = vec![
+            //first tlv type 1
+            (
+                TlvKey::new(1, vec![]),
+                ParseData::TypedData(4, b"abcdef".to_vec()),
+            ),
+            //second tlv type 1
+            (
+                TlvKey::new(1, vec![]),
+                ParseData::TypedData(4, b"abcdef".to_vec()),
+            ),
+        ];
+        let linter = TLV1Linter;
+        let result = linter.lint(&entries);
+
+        let many_tlvs_lint = result
+            .into_iter()
+            .find(|entry| entry.lint == Lint::Error(2));
+        match many_tlvs_lint {
+            None => panic!("Multiple TLV type 1 error not raised!"),
+            Some(entry) => assert_eq!(entry.tlv_key.unwrap().tlv_type, 1),
+        }
+    }
+
+    #[test]
+    fn tlv1linter_invalid_mac() {
+        let entries = vec![
+            //first tlv type 1
+            (
+                TlvKey::new(1, vec![]),
+                ParseData::TypedData(4, b"it doesn't matter, it's too long".to_vec()),
+            ),
+        ];
+        let linter = TLV1Linter;
+        let result = linter.lint(&entries);
+
+        let many_tlvs_lint = result
+            .into_iter()
+            .find(|entry| entry.lint == Lint::Error(3));
+        match many_tlvs_lint {
+            None => panic!("Invalid MAC address error not raised!"),
+            Some(entry) => assert_eq!(entry.tlv_key.unwrap().tlv_type, 1),
+        }
+    }
+
+    #[test]
+    fn tlv1linter_no_lint_on_correct_mac6_entry() {
+        let entries = vec![(
+            TlvKey::new(1, vec![]),
+            //subtype is 4, 6 bytes, we should be fine
+            ParseData::TypedData(4, b"ABCDEF".to_vec()),
+        )];
+        let linter = TLV1Linter;
+        let result = linter.lint(&entries);
+        assert!(result.is_empty(), "there should not be any errors here!");
+    }
+
+    #[test]
+    fn tlv1linter_no_lint_on_correct_mac8_entry() {
+        let entries = vec![(
+            TlvKey::new(1, vec![]),
+            //subtype is 4, 8 bytes(EUI64), we should be fine
+            ParseData::TypedData(4, b"ABCDEF12".to_vec()),
+        )];
+        let linter = TLV1Linter;
+        let result = linter.lint(&entries);
+        assert!(result.is_empty(), "there should not be any errors here!");
     }
 }

@@ -222,49 +222,49 @@ impl Dispatcher<'_> {
         //subtype1 info4
         instance.add_htip_parser(b"\x01\x04".to_vec(), Box::new(SizedText::new(31)));
         //subtype1 info20
-        instance.add_htip_parser(b"\x01\x20".to_vec(), Box::new(Percentage::new()));
+        instance.add_htip_parser(b"\x01\x14".to_vec(), Box::new(Percentage::new()));
         //subtype1 info21
-        instance.add_htip_parser(b"\x01\x21".to_vec(), Box::new(Percentage::new()));
+        instance.add_htip_parser(b"\x01\x15".to_vec(), Box::new(Percentage::new()));
         //subtype1 info22
-        instance.add_htip_parser(b"\x01\x22".to_vec(), Box::new(Percentage::new()));
+        instance.add_htip_parser(b"\x01\x16".to_vec(), Box::new(Percentage::new()));
         //subtype1 info23
         instance.add_htip_parser(
-            b"\x01\x23".to_vec(),
+            b"\x01\x17".to_vec(),
             Box::new(SizedNumber::new(NumberSize::Six)),
         );
         //subtype1 info24
         instance.add_htip_parser(
-            b"\x01\x24".to_vec(),
+            b"\x01\x18".to_vec(),
             Box::new(SizedNumber::new(NumberSize::One)),
         );
         //subtype1 info25
         instance.add_htip_parser(
-            b"\x01\x25".to_vec(),
+            b"\x01\x19".to_vec(),
             Box::new(SizedNumber::new(NumberSize::One)),
         );
         //subtype1 info26
         instance.add_htip_parser(
-            b"\x01\x26".to_vec(),
+            b"\x01\x1a".to_vec(),
             Box::new(SizedNumber::new(NumberSize::One)),
         );
         //subtype1 info27
         instance.add_htip_parser(
-            b"\x01\x27".to_vec(),
+            b"\x01\x1b".to_vec(),
             Box::new(SizedNumber::new(NumberSize::One)),
         );
         //subtype1 info50
-        instance.add_htip_parser(b"\x01\x50".to_vec(), Box::new(SizedText::new(63)));
+        instance.add_htip_parser(b"\x01\x32".to_vec(), Box::new(SizedText::new(63)));
         //subtype1 info51
-        instance.add_htip_parser(b"\x01\x51".to_vec(), Box::new(Percentage::new()));
+        instance.add_htip_parser(b"\x01\x33".to_vec(), Box::new(Percentage::new()));
         //subtype1 info52
-        instance.add_htip_parser(b"\x01\x52".to_vec(), Box::new(Percentage::new()));
+        instance.add_htip_parser(b"\x01\x34".to_vec(), Box::new(Percentage::new()));
         //subtype1 info53
-        instance.add_htip_parser(b"\x01\x53".to_vec(), Box::new(Percentage::new()));
+        instance.add_htip_parser(b"\x01\x35".to_vec(), Box::new(Percentage::new()));
         //subtype1 info54
-        instance.add_htip_parser(b"\x01\x54".to_vec(), Box::new(Percentage::new()));
+        instance.add_htip_parser(b"\x01\x36".to_vec(), Box::new(Percentage::new()));
         //subtype1 info80
         instance.add_htip_parser(
-            b"\x01\x80".to_vec(),
+            b"\x01\x50".to_vec(),
             Box::new(SizedNumber::new(NumberSize::Two)),
         );
         //TODO: use a composite parser for this in the future
@@ -274,6 +274,8 @@ impl Dispatcher<'_> {
         instance.add_htip_parser(b"\x03".to_vec(), Box::new(Mac::new()));
 
         instance.linters.push(Box::new(CheckEndTlv));
+        instance.linters.push(Box::new(InvalidChars::new()));
+        instance.linters.push(Box::new(TLV1Linter));
         instance
     }
 }
