@@ -82,8 +82,6 @@ impl<'a> TLV<'a> {
         self.length
     }
 
-    /// This somehow `shortens` the lifetime of value
-    /// If necessary use the raw value field
     pub fn value(&self) -> &'a [u8] {
         &self.value[..]
     }
