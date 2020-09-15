@@ -156,8 +156,25 @@ pub struct TLV1Linter;
 
 impl Linter for TLV1Linter {
     fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
-        //TODO implement here
-        vec![]
+        let dup = info.iter().filter(|(key, data)| key.tlv_type == 1).count();
+
+        let le: Vec<_> = info
+            .iter()
+            .filter(|(key, data)| match data {
+                ParseData::TypedData(4u8, d) => {
+                    let size = d.len();
+                    size > 4 && size != 6 && size != 8
+                }
+                _ => false,
+            })
+            .map(|_| LintEntry::new(Lint::Error(3)).with_tlv(TlvKey::new(1, vec![])))
+            .collect();
+
+        if dup > 1 {
+            return vec![LintEntry::new(Lint::Error(2)).with_tlv(TlvKey::new(1, vec![]))];
+        } else {
+            le
+        }
     }
 }
 
