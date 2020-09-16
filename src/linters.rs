@@ -407,4 +407,34 @@ mod tests {
         let result = linter.lint(&entries);
         assert!(result.is_empty(), "there should not be any errors here!");
     }
+
+    #[test]
+    fn tlv1linter_generate_error4_for_locally_assigned_data() {
+        let entries = vec![(
+            TlvKey::new(1, vec![]),
+            ParseData::TypedData(7, b"locally assigned string here".to_vec()),
+        )];
+        let linter = TLV1Linter;
+        let result = linter.lint(&entries);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].lint, Lint::Error(4));
+        assert_eq!(
+            result[0].tlv_key.as_ref().unwrap(),
+            &TlvKey::new(1.into(), vec![])
+        );
+    }
+
+    #[test]
+    fn tlv1linter_dont_raise_mac_error_for_type2_data() {
+        let entries = vec![(
+            TlvKey::new(2, vec![]),
+            ParseData::TypedData(4, b"just happened to be type 4".to_vec()),
+        )];
+        let linter = TLV1Linter;
+        let result = linter.lint(&entries);
+        assert!(
+            result.is_empty(),
+            "raised a lint where there shouldn't be one!"
+        );
+    }
 }
