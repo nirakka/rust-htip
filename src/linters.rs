@@ -156,25 +156,41 @@ pub struct TLV1Linter;
 
 impl Linter for TLV1Linter {
     fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
-        let dup = info.iter().filter(|(key, data)| key.tlv_type == 1).count();
+        let mut le: Vec<LintEntry> = vec![];
 
-        let le: Vec<_> = info
-            .iter()
-            .filter(|(key, data)| match data {
-                ParseData::TypedData(4u8, d) => {
-                    let size = d.len();
-                    size > 4 && size != 6 && size != 8
-                }
-                _ => false,
-            })
-            .map(|_| LintEntry::new(Lint::Error(3)).with_tlv(TlvKey::new(1, vec![])))
-            .collect();
-
+        let dup = info.iter().filter(|(key, _data)| key.tlv_type == 1).count();
         if dup > 1 {
-            return vec![LintEntry::new(Lint::Error(2)).with_tlv(TlvKey::new(1, vec![]))];
-        } else {
-            le
+            le.push(LintEntry::new(Lint::Error(2)).with_tlv(TlvKey::new(1, vec![])));
         }
+
+        let l: Vec<LintEntry> = info
+            .iter()
+            .filter(|(key, _data)| key.tlv_type == 1)
+            .filter_map(|(key, data)| match data {
+                ParseData::TypedData(4u8, _d) => {
+                    let size = _d.len();
+                    if size > 4 && size != 6 && size != 8 {
+                        Some(LintEntry::new(Lint::Error(3)).with_tlv(key.clone()))
+                    } else {
+                        None
+                    }
+                }
+                ParseData::TypedData(7u8, _d) => {
+                    let allowed = ('A'..='F').chain('0'..='9').collect::<String>();
+                    if _d.len() != 6 && _d.len() != 8
+                        || _d.iter().any(|c| !allowed.contains(char::from(*c)))
+                    {
+                        Some(LintEntry::new(Lint::Error(4)).with_tlv(key.clone()))
+                    } else {
+                        None
+                    }
+                }
+                _ => None, //never happening
+            })
+            .collect();
+        le.extend(l);
+
+        le
     }
 }
 
@@ -421,6 +437,20 @@ mod tests {
         assert_eq!(
             result[0].tlv_key.as_ref().unwrap(),
             &TlvKey::new(1.into(), vec![])
+        );
+    }
+
+    #[test]
+    fn tlv1linter_success_for_locally_assigned_data() {
+        let entries = vec![(
+            TlvKey::new(1, vec![]),
+            ParseData::TypedData(7, b"ABCDEF".to_vec()),
+        )];
+        let linter = TLV1Linter;
+        let result = linter.lint(&entries);
+        assert!(
+            result.is_empty(),
+            "raised a lint where there shouldn't be one!"
         );
     }
 
