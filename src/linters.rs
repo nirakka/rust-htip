@@ -180,12 +180,12 @@ impl Linter for TLV1Linter {
                     if d.len() != 6 && d.len() != 8
                         || d.iter().any(|c| !allowed.contains(char::from(*c)))
                     {
-                        Some(LintEntry::new(Lint::Error(4)).with_tlv(key.clone()))
+                        Some(LintEntry::new(Lint::Warning(1)).with_tlv(key.clone()))
                     } else {
                         None
                     }
                 }
-                _ => None, //never happening
+                _ => Some(LintEntry::new(Lint::Error(4)).with_tlv(key.clone())),
             })
             .collect();
         le.extend(l);
