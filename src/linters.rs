@@ -167,18 +167,18 @@ impl Linter for TLV1Linter {
             .iter()
             .filter(|(key, _data)| key.tlv_type == 1)
             .filter_map(|(key, data)| match data {
-                ParseData::TypedData(4u8, _d) => {
-                    let size = _d.len();
-                    if size > 4 && size != 6 && size != 8 {
+                ParseData::TypedData(4u8, d) => {
+                    let size = d.len();
+                    if size != 6 && size != 8 {
                         Some(LintEntry::new(Lint::Error(3)).with_tlv(key.clone()))
                     } else {
                         None
                     }
                 }
-                ParseData::TypedData(7u8, _d) => {
+                ParseData::TypedData(7u8, d) => {
                     let allowed = ('A'..='F').chain('0'..='9').collect::<String>();
-                    if _d.len() != 6 && _d.len() != 8
-                        || _d.iter().any(|c| !allowed.contains(char::from(*c)))
+                    if d.len() != 6 && d.len() != 8
+                        || d.iter().any(|c| !allowed.contains(char::from(*c)))
                     {
                         Some(LintEntry::new(Lint::Error(4)).with_tlv(key.clone()))
                     } else {
@@ -189,7 +189,6 @@ impl Linter for TLV1Linter {
             })
             .collect();
         le.extend(l);
-
         le
     }
 }
@@ -433,7 +432,7 @@ mod tests {
         let linter = TLV1Linter;
         let result = linter.lint(&entries);
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].lint, Lint::Error(4));
+        assert_eq!(result[0].lint, Lint::Warning(1));
         assert_eq!(
             result[0].tlv_key.as_ref().unwrap(),
             &TlvKey::new(1.into(), vec![])
@@ -465,6 +464,21 @@ mod tests {
         assert!(
             result.is_empty(),
             "raised a lint where there shouldn't be one!"
+        );
+    }
+    #[test]
+    fn tlv1linter_generate_error4_for_other_types() {
+        let entries = vec![(
+            TlvKey::new(1, vec![]),
+            ParseData::TypedData(6, b"type six data, i don't even know what this is".to_vec()),
+        )];
+        let linter = TLV1Linter;
+        let result = linter.lint(&entries);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].lint, Lint::Error(4));
+        assert_eq!(
+            result[0].tlv_key.as_ref().unwrap(),
+            &TlvKey::new(1.into(), vec![])
         );
     }
 }
