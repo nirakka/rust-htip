@@ -16,6 +16,7 @@ lazy_static! {
             ),
             (Lint::Warning(1), "Invalid Characters"),
             (Lint::Warning(2), "Trailing characters in TLV"),
+            (Lint::Warning(3), "Unknown TLV"),
         ]
         .into_iter()
         .collect()

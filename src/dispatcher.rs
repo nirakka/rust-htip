@@ -188,22 +188,37 @@ impl Dispatcher<'_> {
         lints: &mut Vec<LintEntry>,
     ) -> (ParserKey, Result<ParseData, ParsingError<'s>>) {
         //get key
-        let key = self.parsers.key_of(tlv).unwrap();
-        //skipping data related to the key
-        let skip = key.prefix.len();
-        let parser = self.parsers.get_mut(&key).unwrap();
-        //setup context(take skip into account)
-        let mut context = Context::new(&tlv.value()[skip..]);
-        let res = (key.clone(), parser.parse(&mut context));
-        //check if the tlv was completely consumed, else ad a lint
-        if !context.get().is_empty() {
-            lints.push(
-                LintEntry::new(Lint::Warning(2))
-                    .with_tlv(key.clone())
-                    .with_extra_info(format!("{} extra bytes", context.get().len())),
-            );
+        match self.parsers.key_of(tlv) {
+            //do we have a parser?
+            Some(key) => {
+                //skipping data related to the key
+                let skip = key.prefix.len();
+                let parser = self.parsers.get_mut(&key).unwrap();
+                //setup context(take skip into account)
+                let mut context = Context::new(&tlv.value()[skip..]);
+                let res = (key.clone(), parser.parse(&mut context));
+                //check if context is empty, else issue a lint
+                if !context.get().is_empty() {
+                    lints.push(
+                        LintEntry::new(Lint::Warning(2))
+                            .with_tlv(key)
+                            .with_extra_info(format!("{} extra bytes", context.get().len())),
+                    );
+                }
+                res
+            }
+            None => {
+                //we don't have a parser for this
+                //use the default AnyBinary parser
+                let mut context = Context::new(&tlv.value());
+                //the fake key only stores the type; everything else is data
+                let key = TlvKey::new(tlv.tlv_type().into(), vec![]);
+                //issue a lint for unhandled tlv
+                lints.push(LintEntry::new(Lint::Warning(3)).with_tlv(key.clone()));
+                //return the parsed thing
+                (key, (AnyBinary).parse(&mut context))
+            }
         }
-        res
     }
 
     pub(crate) fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
@@ -530,5 +545,22 @@ mod tests {
         assert!(results.errors.is_empty());
         assert_eq!(results.lints[0].lint, Lint::Warning(2));
         assert_eq!(results.lints.len(), 2);
+    }
+
+    #[test]
+    fn parse_detects_unknown_tlvs() {
+        //\xf0 is unknown to us
+        let frame = b"\xf0\x100123456789ABCDEF\
+            \x00\x00";
+        let mut dsp = Dispatcher::new();
+        let results = dsp.parse(frame).expect("this should parse, check frame!");
+        //assert that we have no errors
+        assert!(results.errors.is_empty());
+        assert_eq!(results.lints[0].lint, Lint::Warning(3));
+        assert_eq!(results.lints.len(), 1);
+        match &results.info[0].1 {
+            ParseData::Binary(bin) => assert_eq!(bin, b"0123456789ABCDEF"),
+            _ => panic!("this should be a string!"),
+        }
     }
 }
