@@ -8,13 +8,14 @@ lazy_static! {
     static ref LINTS: HashMap<Lint, &'static str> = {
         vec![
             (Lint::Error(1), "No End TLV"),
-            (Lint::Warning(1), "Invalid Characters"),
             (Lint::Error(2), "Multiple Type 1 TLVs"),
             (Lint::Error(3), "Invalid MAC in Type 1 TLV"),
             (
                 Lint::Error(4),
                 "Type 1 TLV is neither MAC nor locally assigned",
             ),
+            (Lint::Warning(1), "Invalid Characters"),
+            (Lint::Warning(2), "Trailing characters in TLV"),
         ]
         .into_iter()
         .collect()

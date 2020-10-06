@@ -3,7 +3,7 @@
 pub mod dispatcher;
 /// A collection of linters that check the contents of parsed information
 /// for irregularities
-pub mod linters;
+mod linters;
 /// A collection of parsers that check the contents of tlvs for structural
 /// integrity and extract pieces of parsed information
 pub mod parsers;
@@ -11,8 +11,8 @@ mod subkeys;
 /// Type-Length-Value types
 pub mod tlv;
 
+pub use dispatcher::Dispatcher;
 pub use dispatcher::ParserKey as TlvKey;
-pub use dispatcher::{parse_frame, Dispatcher};
 pub use linters::Lint;
 pub use parsers::ParseData;
 pub use tlv::{TlvType, TLV};

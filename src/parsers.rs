@@ -24,6 +24,10 @@ impl<'a> Context<'a> {
     pub fn set(&mut self, data: &'a [u8]) {
         self.data = data;
     }
+
+    pub fn get(&mut self) -> &'a [u8] {
+        self.data
+    }
 }
 
 #[derive(Debug, Clone)]

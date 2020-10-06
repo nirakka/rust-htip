@@ -76,7 +76,7 @@ impl LexOrder<TLV<'_>> for ParserKey {
     }
 }
 
-pub fn parse_as_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
+pub(crate) fn parse_as_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
     //if input length less than 2
     //it's a too short error
     if input.len() < 2 {
@@ -101,7 +101,7 @@ pub fn parse_as_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
 }
 
 ///Parse a frame into a list of tlvs, stop on error
-pub fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
+pub(crate) fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
     let mut result = vec![];
     let mut input = frame;
 
@@ -154,7 +154,7 @@ impl Dispatcher<'_> {
         }
     }
 
-    pub fn parse_tlv<'a, 's>(
+    pub(crate) fn parse_tlv<'a, 's>(
         &mut self,
         tlv: &'a TLV<'s>,
     ) -> (ParserKey, Result<ParseData, ParsingError<'s>>) {
@@ -168,19 +168,50 @@ impl Dispatcher<'_> {
         (key.clone(), parser.parse(&mut context))
     }
 
-    pub fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
+    pub(crate) fn parse_tlv_ex<'a, 's>(
+        &mut self,
+        tlv: &'a TLV<'s>,
+        lints: &mut Vec<LintEntry>,
+    ) -> (ParserKey, Result<ParseData, ParsingError<'s>>) {
+        //get key
+        let key = self.parsers.key_of(tlv).unwrap();
+        //skipping data related to the key
+        let skip = key.prefix.len();
+        let parser = self.parsers.get_mut(&key).unwrap();
+        //setup context(take skip into account)
+        let mut context = Context::new(&tlv.value()[skip..]);
+        let res = (key.clone(), parser.parse(&mut context));
+        //check if the tlv was completely consumed, else ad a lint
+        if !context.get().is_empty() {
+            lints.push(
+                LintEntry::new(Lint::Warning(2))
+                    .with_tlv(key.clone())
+                    .with_extra_info(format!("{} extra bytes", context.get().len())),
+            );
+        }
+        res
+    }
+
+    pub(crate) fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
         self.linters
             .iter()
             .flat_map(|linter| linter.lint(info))
             .collect()
     }
 
-    pub fn parse<'a>(&mut self, frame: &'a [u8]) -> FrameInfo<'a> {
+    /// Parses the given frame and returns relevant frame information
+    /// If the frame has misconstructed TLVs it returns None
+    pub fn parse<'a>(&mut self, frame: &'a [u8]) -> Option<FrameInfo<'a>> {
         let tlvs = parse_frame(frame);
+        ////parse frame short-circuits if it couldn't do a tlv
+        if tlvs.last()?.is_err() {
+            return None;
+        }
+        let mut lints = vec![];
         let (info, errors) = tlvs
             .iter()
             .filter_map(|result| result.as_ref().ok())
-            .map(|tlv| self.parse_tlv(tlv))
+            .map(|tlv| self.parse_tlv_ex(tlv, &mut lints))
             //split into ok data and parsing errors
             .partition::<Vec<_>, _>(|(_tlv, res)| res.is_ok());
         //unwrap data
@@ -194,13 +225,13 @@ impl Dispatcher<'_> {
             .map(|(tlv, err)| (tlv, err.unwrap_err()))
             .collect::<Vec<_>>();
 
-        let lints = self.lint(&info);
-        FrameInfo {
+        lints.append(&mut self.lint(&info));
+        Some(FrameInfo {
             tlvs,
             info,
             errors,
             lints,
-        }
+        })
     }
 
     pub fn new() -> Self {
@@ -472,5 +503,18 @@ mod tests {
             "OUIOUI",
             dsp.parse_tlv(&tlvs[1]).1.unwrap().into_string().unwrap()
         );
+    }
+
+    #[test]
+    fn parse_detects_trailing_characters() {
+        let frame = b"\xfe\x19\xe0\x27\x1a\x01\x01\x09123456789characters\
+            \xfe\x11\xe0\x27\x1a\x01\x02\x06CAFEBEextra\
+            \x00\x00";
+        let mut dsp = Dispatcher::new();
+        let results = dsp.parse(frame).expect("this should parse, check frame!");
+        //assert that we have no errors
+        assert!(results.errors.is_empty());
+        assert_eq!(results.lints[0].lint, Lint::Warning(2));
+        assert_eq!(results.lints.len(), 2);
     }
 }
