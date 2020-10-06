@@ -159,13 +159,27 @@ impl Dispatcher<'_> {
         tlv: &'a TLV<'s>,
     ) -> (ParserKey, Result<ParseData, ParsingError<'s>>) {
         //get key
-        let key = self.parsers.key_of(tlv).unwrap();
-        //skipping data related to the key
-        let skip = key.prefix.len();
-        let parser = self.parsers.get_mut(&key).unwrap();
-        //setup context(take skip into account)
-        let mut context = Context::new(&tlv.value()[skip..]);
-        (key.clone(), parser.parse(&mut context))
+        match self.parsers.key_of(tlv) {
+            //do we have a parser?
+            Some(key) => {
+                //skipping data related to the key
+                let skip = key.prefix.len();
+                let parser = self.parsers.get_mut(&key).unwrap();
+                //setup context(take skip into account)
+                let mut context = Context::new(&tlv.value()[skip..]);
+                (key, parser.parse(&mut context))
+            }
+            None => {
+                //we don't have a parser for this
+                //use the default AnyBinary parser
+                let mut context = Context::new(&tlv.value());
+                (
+                    //the fake key only stores the type; everything else is data
+                    TlvKey::new(tlv.tlv_type().into(), vec![]),
+                    (AnyBinary).parse(&mut context),
+                )
+            }
+        }
     }
 
     pub(crate) fn parse_tlv_ex<'a, 's>(

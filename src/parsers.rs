@@ -233,6 +233,16 @@ impl Parser for Dummy {
     }
 }
 
+pub struct AnyBinary;
+
+impl Parser for AnyBinary {
+    fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
+        let data = &ctx.data[..];
+        ctx.set(&ctx.data[..0]);
+        Ok(ParseData::Binary(data.to_vec()))
+    }
+}
+
 pub struct FixedSequence {
     key: Vec<u8>,
 }
