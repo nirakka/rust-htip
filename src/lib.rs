@@ -1,3 +1,16 @@
+//! You are probably looking for the [dispatcher::Dispatcher::parse()] method.
+//!
+//! To parse HTIP related data, first setup a new [Dispatcher] instance
+//! and then pass the data to be parsed to the dispatcher's
+//! [parse()](dispatcher::Dispatcher::parse()) method.
+//!
+//! After a successfull parse, you are looking into handling your [FrameInfo] data,
+//! which is mainly split into three categories:
+//! * parsed tlv information as [InfoEntries](InfoEntry) (also see [parsers::ParseData])
+//! * linting warinings & errors ([LintEntry])
+//! * hard parsing errors ([ParsingError])
+
+#![deny(broken_intra_doc_links)]
 //TODO figure out proper visibilities
 /// Organize parsers & linters into a single unit
 pub mod dispatcher;
@@ -6,7 +19,7 @@ pub mod dispatcher;
 mod linters;
 /// A collection of parsers that check the contents of tlvs for structural
 /// integrity and extract pieces of parsed information
-pub mod parsers;
+mod parsers;
 mod subkeys;
 /// Type-Length-Value types
 pub mod tlv;
@@ -40,9 +53,9 @@ pub enum ParsingError<'a> {
 
 /// A lint entry associated with a frame
 pub struct LintEntry {
-    /// Lint type
+    /// [Lint] type
     pub lint: Lint,
-    /// Related tlv&prefix
+    /// Related tlv & prefix
     pub tlv_key: Option<TlvKey>,
     /// Any additional info, used to customize error message
     pub extra_info: Option<String>,
