@@ -4,8 +4,10 @@
 //! and then pass the data to be parsed to the dispatcher's
 //! [parse()](dispatcher::Dispatcher::parse()) method.
 //!
-//! After a successfull parse, you are looking into handling your [FrameInfo] data,
-//! which is mainly split into three categories:
+//! After a successfull parse, you are looking into handling either your [FrameInfo] data,
+//! or your [InvalidFrame] error.
+//!
+//! [FrameInfo] is split into three types of information:
 //! * parsed tlv information as [InfoEntries](InfoEntry) (also see [parsers::ParseData])
 //! * linting warinings & errors ([LintEntry])
 //! * hard parsing errors ([ParsingError])
@@ -24,8 +26,8 @@ mod subkeys;
 /// Type-Length-Value types
 pub mod tlv;
 
-pub use dispatcher::Dispatcher;
 pub use dispatcher::ParserKey as TlvKey;
+pub use dispatcher::{Dispatcher, InvalidFrame};
 pub use linters::Lint;
 pub use parsers::ParseData;
 pub use tlv::{TlvType, TLV};
@@ -49,6 +51,8 @@ pub enum ParsingError<'a> {
     InvalidText(std::str::Utf8Error),
     ///Unknown type/subtype
     Unknown,
+    ///TLV parsing failed, resulting in an invalid frame
+    InvalidFrame(&'a [u8]),
 }
 
 /// A lint entry associated with a frame

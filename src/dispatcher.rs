@@ -101,6 +101,7 @@ pub(crate) fn parse_as_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
 }
 
 ///Parse a frame into a list of tlvs, stop on error
+///This will never return an empty vector, so it's safe to call last on it
 pub(crate) fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
     let mut result = vec![];
     let mut input = frame;
@@ -114,16 +115,27 @@ pub(crate) fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
                 //save the tlv on the result vector
                 result.push(Ok(tlv));
             }
-            Err(error) => {
+            Err(_error) => {
                 //we encountered an error.
-                //push the erroro in the result vector
+                //setup the data that resulted in an error and
                 //break out of the parsing loop
-                result.push(Err(error));
+                result.push(Err(ParsingError::InvalidFrame(input)));
                 break;
             }
         }
     }
     result
+}
+
+///The result in case of a frame that cannot be parsed
+#[derive(Debug)]
+pub struct InvalidFrame<'a> {
+    ///The TLVs that were successfully parsed up until failure
+    pub tlvs: Vec<TLV<'a>>,
+    ///The actual data that cannot be parsed into a TLV. It is possible
+    ///that this failure is a result of the last tlv that was parsed.
+    ///This tlv is the last tlv in [InvalidFrame::tlvs].
+    pub pointer: &'a [u8],
 }
 
 pub struct Dispatcher<'a> {
@@ -228,14 +240,45 @@ impl Dispatcher<'_> {
             .collect()
     }
 
-    /// Parses the given frame and returns relevant frame information
-    /// If the frame has misconstructed TLVs it returns None
-    pub fn parse<'a>(&mut self, frame: &'a [u8]) -> Option<FrameInfo<'a>> {
-        let tlvs = parse_frame(frame);
-        ////parse frame short-circuits if it couldn't do a tlv
-        if tlvs.last()?.is_err() {
-            return None;
+    /// Parses the given frame and returns relevant [FrameInfo]
+    /// If the frame has misconstructed TLVs it returns an [InvalidFrame]
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_htip::Dispatcher;
+    /// let data = b"\x02\x05ABCDE\x00\x00";
+    ///
+    /// let mut dispatcher = Dispatcher::new();
+    /// let frame_info = dispatcher.parse(data).unwrap();
+    /// println!("number of tlvs: {}", frame_info.tlvs.len());
+    /// println!("number of infos: {}", frame_info.info.len());
+    /// println!("number of parser errors: {}", frame_info.errors.len());
+    /// println!("number of lints: {}", frame_info.lints.len());
+    /// ```
+    pub fn parse<'a>(&mut self, frame: &'a [u8]) -> Result<FrameInfo<'a>, InvalidFrame<'a>> {
+        //invariants:
+        //a)we know it's a non-zero length vec
+        //b)with the last entry possibly an InvalidFrame error
+        //c)all other entries in the parse_frame response are TLVs
+        let mut tlvs = parse_frame(frame);
+        //invariant a) unwrap and then b)
+        if tlvs.last().unwrap().is_err() {
+            //Error, bad frame! Let's setup our InvalidFrame error.
+            // a) unwrap, b) unwrap_err & c) pop() keeps only tlvs
+            let point = tlvs.pop().unwrap().unwrap_err();
+            let tlvs = tlvs
+                .into_iter()
+                .collect::<Result<Vec<TLV<'a>>, _>>()
+                .unwrap();
+            let pointer = match point {
+                ParsingError::InvalidFrame(p) => p,
+                _ => panic!("this cannot happen!"),
+            };
+            return Err(InvalidFrame { tlvs, pointer });
         }
+
+        //everything's fine, keep on parsing/linting
         let mut lints = vec![];
         let (info, errors) = tlvs
             .iter()
@@ -255,7 +298,7 @@ impl Dispatcher<'_> {
             .collect::<Vec<_>>();
 
         lints.append(&mut self.lint(&info));
-        Some(FrameInfo {
+        Ok(FrameInfo {
             tlvs,
             info,
             errors,
@@ -263,6 +306,7 @@ impl Dispatcher<'_> {
         })
     }
 
+    /// Create a new Dispatcher instance
     pub fn new() -> Self {
         let mut instance = Dispatcher::empty();
         instance.add_parser(TlvType::from(0u8), b"".to_vec(), Box::new(NoData));
@@ -428,7 +472,8 @@ mod parse_tests {
     fn parse_frame_3tlvs_last_one_error() {
         let frame = b"\x02\x03123\x04\x0512345\x03\x1ftoo short";
         let mut tlvs = parse_frame(frame);
-        assert_eq!(tlvs.pop().unwrap().unwrap_err(), ParsingError::TooShort);
+        let error = tlvs.pop().unwrap().unwrap_err();
+        assert_eq!(error, ParsingError::InvalidFrame(b"\x03\x1ftoo short"));
         let second_tlv = tlvs.pop().unwrap().unwrap();
         assert_eq!(second_tlv.value(), b"12345");
         assert_eq!(second_tlv.len(), 5);
