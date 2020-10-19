@@ -46,7 +46,7 @@ fn parse_captured<T: pcap::Activated>(mut _capture: pcap::Capture<T>) {
                 if data.get(12..14).unwrap() == [136, 204] {
                     // check LLDP type
                     let mut dispatcher = Dispatcher::new();
-                    let frame_info = dispatcher.parse(data.get(12..).unwrap());
+                    let frame_info = dispatcher.parse(data.get(14..).unwrap());
 
                     match frame_info {
                         Ok(data) => println!("number of tlvs: {}", data.tlvs.len()),
