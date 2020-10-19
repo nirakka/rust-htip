@@ -88,7 +88,7 @@ pub(crate) fn parse_as_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
     let length = high_bit + (input[1] as usize);
 
     //check if lenght is too short
-    if length > input.len() {
+    if length + 2 > input.len() {
         return Result::Err(ParsingError::TooShort);
     }
 
