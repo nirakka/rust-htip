@@ -1,5 +1,6 @@
 use pcap;
 use rust_htip;
+use rust_htip::Dispatcher;
 
 use std::env;
 use std::error::Error;
@@ -37,6 +38,25 @@ fn main() -> Result<(), Box<dyn Error>> {
 //
 //See the documentation here:
 //https://docs.rs/pcap/0.7.0/pcap/struct.Capture.html
-fn parse_captured<T: pcap::Activated>(_capture: pcap::Capture<T>) {
-    unimplemented!()
+fn parse_captured<T: pcap::Activated>(mut _capture: pcap::Capture<T>) {
+    loop {
+        let cap = _capture.next();
+        match cap {
+            Ok(data) => {
+                if data.get(12..14).unwrap() == [136, 204] {
+                    // check LLDP type
+                    let mut dispatcher = Dispatcher::new();
+                    let frame_info = dispatcher.parse(data.get(12..).unwrap());
+
+                    match frame_info {
+                        Ok(data) => println!("number of tlvs: {}", data.tlvs.len()),
+                        Err(err) => {
+                            println!("{}", err);
+                        }
+                    }
+                }
+            }
+            Err(err) => break,
+        }
+    }
 }

@@ -138,6 +138,12 @@ pub struct InvalidFrame<'a> {
     pub pointer: &'a [u8],
 }
 
+impl fmt::Display for InvalidFrame<'_>{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.tlvs)
+    }
+}
+
 pub struct Dispatcher<'a> {
     parsers: Storage<ParserKey, TLV<'a>, Box<dyn Parser>>,
     linters: Vec<Box<dyn Linter>>,
