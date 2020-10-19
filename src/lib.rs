@@ -51,8 +51,6 @@ pub enum ParsingError<'a> {
     InvalidText(std::str::Utf8Error),
     ///Unknown type/subtype
     Unknown,
-    ///TLV parsing failed, resulting in an invalid frame
-    InvalidFrame(&'a [u8]),
 }
 
 /// A lint entry associated with a frame
@@ -117,9 +115,8 @@ pub type ErrorEntry<'a> = (TlvKey, ParsingError<'a>);
 /// A structure holding all the relevant information for a
 /// parsed HTIP frame.
 pub struct FrameInfo<'a> {
-    /// A vector with all the TLV parsing results. If the last result
-    /// is an error, there was a structural TLV problem
-    pub tlvs: Vec<Result<TLV<'a>, ParsingError<'a>>>,
+    /// A vector with all the TLVs
+    pub tlvs: Vec<TLV<'a>>,
     /// Information extracted from each tlv, using the parsers
     pub info: Vec<InfoEntry>,
     /// Errors encountered by the parsers

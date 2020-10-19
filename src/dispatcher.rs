@@ -102,7 +102,7 @@ pub(crate) fn parse_as_tlv(input: &[u8]) -> Result<TLV, ParsingError> {
 
 ///Parse a frame into a list of tlvs, stop on error
 ///This will never return an empty vector, so it's safe to call last on it
-pub(crate) fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
+pub(crate) fn parse_frame(frame: &[u8]) -> Result<Vec<TLV>, InvalidFrame> {
     let mut result = vec![];
     let mut input = frame;
 
@@ -113,21 +113,21 @@ pub(crate) fn parse_frame(frame: &[u8]) -> Vec<Result<TLV, ParsingError>> {
                 assert!(tlv.len() + 2 <= input.len());
                 input = &input[(tlv.len() + 2)..];
                 //save the tlv on the result vector
-                result.push(Ok(tlv));
+                result.push(tlv);
             }
             Err(_error) => {
-                //we encountered an error.
-                //setup the data that resulted in an error and
-                //break out of the parsing loop
-                result.push(Err(ParsingError::InvalidFrame(input)));
-                break;
+                return Err(InvalidFrame {
+                    tlvs: result,
+                    pointer: input,
+                })
             }
         }
     }
-    result
+    Ok(result)
 }
 
-///The result in case of a frame that cannot be parsed
+///The result in case of a frame that cannot be parsed. Such a frame had a section
+///of data that could not be parsed as a valid TLV.
 #[derive(Debug)]
 pub struct InvalidFrame<'a> {
     ///The TLVs that were successfully parsed up until failure
@@ -141,6 +141,12 @@ pub struct InvalidFrame<'a> {
 pub struct Dispatcher<'a> {
     parsers: Storage<ParserKey, TLV<'a>, Box<dyn Parser>>,
     linters: Vec<Box<dyn Linter>>,
+}
+
+impl Default for Dispatcher<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Dispatcher<'_> {
@@ -257,32 +263,12 @@ impl Dispatcher<'_> {
     /// println!("number of lints: {}", frame_info.lints.len());
     /// ```
     pub fn parse<'a>(&mut self, frame: &'a [u8]) -> Result<FrameInfo<'a>, InvalidFrame<'a>> {
-        //invariants:
-        //a)we know it's a non-zero length vec
-        //b)with the last entry possibly an InvalidFrame error
-        //c)all other entries in the parse_frame response are TLVs
-        let mut tlvs = parse_frame(frame);
-        //invariant a) unwrap and then b)
-        if tlvs.last().unwrap().is_err() {
-            //Error, bad frame! Let's setup our InvalidFrame error.
-            // a) unwrap, b) unwrap_err & c) pop() keeps only tlvs
-            let point = tlvs.pop().unwrap().unwrap_err();
-            let tlvs = tlvs
-                .into_iter()
-                .collect::<Result<Vec<TLV<'a>>, _>>()
-                .unwrap();
-            let pointer = match point {
-                ParsingError::InvalidFrame(p) => p,
-                _ => panic!("this cannot happen!"),
-            };
-            return Err(InvalidFrame { tlvs, pointer });
-        }
+        let tlvs = parse_frame(frame)?;
 
         //everything's fine, keep on parsing/linting
         let mut lints = vec![];
         let (info, errors) = tlvs
             .iter()
-            .filter_map(|result| result.as_ref().ok())
             .map(|tlv| self.parse_tlv_ex(tlv, &mut lints))
             //split into ok data and parsing errors
             .partition::<Vec<_>, _>(|(_tlv, res)| res.is_ok());
@@ -441,27 +427,21 @@ mod parse_tests {
     #[test]
     fn parse_frame_with_one_tlv() {
         let frame = &[0, 0];
-        let result = parse_frame(frame);
+        let result = parse_frame(frame).unwrap();
         assert!(result.len() == 1, "result length is not 1");
-        let res_tlv = result[0]
-            .as_ref()
-            .expect("an end tlv should be present here");
-        assert_eq!(res_tlv.tlv_type(), TlvType::End);
+        assert_eq!(result[0].tlv_type(), TlvType::End);
     }
 
     #[test]
     fn parse_frame_with_two_tlv() {
         let frame = &[2, 4, b'a', b'b', b'c', b'd', 0, 0];
-        let mut result = parse_frame(frame);
+        let mut result = parse_frame(frame).expect("this should parse cleanly!");
         assert_eq!(result.len(), 2);
         //end tlv here
-        let tlv = result.pop().unwrap().expect("end tlv should be here");
+        let tlv = result.pop().expect("end tlv should be here");
         assert_eq!(tlv.tlv_type(), TlvType::End);
 
-        let tlv = result
-            .pop()
-            .unwrap()
-            .expect("chassis id tlv should be here");
+        let tlv = result.pop().expect("chassis id tlv should be here");
         assert_eq!(tlv.tlv_type(), TlvType::ChassisID);
         let expected_value = b"abcd";
         assert_eq!(tlv.len(), expected_value.len());
@@ -471,10 +451,9 @@ mod parse_tests {
     #[test]
     fn parse_frame_3tlvs_last_one_error() {
         let frame = b"\x02\x03123\x04\x0512345\x03\x1ftoo short";
-        let mut tlvs = parse_frame(frame);
-        let error = tlvs.pop().unwrap().unwrap_err();
-        assert_eq!(error, ParsingError::InvalidFrame(b"\x03\x1ftoo short"));
-        let second_tlv = tlvs.pop().unwrap().unwrap();
+        let mut invalid_frame = parse_frame(frame).unwrap_err();
+        assert_eq!(invalid_frame.pointer, b"\x03\x1ftoo short");
+        let second_tlv = invalid_frame.tlvs.pop().unwrap();
         assert_eq!(second_tlv.value(), b"12345");
         assert_eq!(second_tlv.len(), 5);
     }
@@ -482,8 +461,9 @@ mod parse_tests {
     #[test]
     fn parse_frame_stops_parsing_after_error() {
         let frame = b"\x02\x03123\x04\x0512345\x03\x1ftoo short\x00\x00";
-        let tlvs = parse_frame(frame);
-        assert_eq!(tlvs.len(), 3);
+        let invalid_frame = parse_frame(frame).unwrap_err();
+        assert_eq!(invalid_frame.pointer, b"\x03\x1ftoo short\x00\x00");
+        assert_eq!(invalid_frame.tlvs.len(), 2);
     }
 }
 
@@ -505,10 +485,7 @@ mod tests {
             \x02\x0a0123456789";
         let dsp = Dispatcher::new();
         //collect our two tlvs, and do stuff with them
-        let tlvs = parse_frame(frame)
-            .into_iter()
-            .collect::<Result<Vec<TLV>, _>>()
-            .unwrap();
+        let tlvs = parse_frame(frame).unwrap();
         assert_eq!(tlvs.len(), 3);
         let key0 = dsp.parsers.key_of(&tlvs[0]).unwrap();
         assert_eq!(key0.tlv_type, 127);
@@ -528,10 +505,7 @@ mod tests {
         //unknown oui
         let frame = b"\xfe\x0f\xAA\xBB\x1a\x01\x01\x09123456789";
         let dsp = Dispatcher::new();
-        let tlvs = parse_frame(frame)
-            .into_iter()
-            .collect::<Result<Vec<TLV>, _>>()
-            .unwrap();
+        let tlvs = parse_frame(frame).unwrap();
         assert_eq!(tlvs.len(), 1);
         assert_eq!(None, dsp.parsers.key_of(&tlvs[0]));
     }
@@ -548,10 +522,7 @@ mod tests {
         let frame = b"\xfe\x0f\xe0\x27\x1a\x01\x01\x09123456789";
         let mut dsp = Dispatcher::new();
         //collect our two tlvs, and do stuff with them
-        let tlvs = parse_frame(frame)
-            .into_iter()
-            .collect::<Result<Vec<TLV>, _>>()
-            .unwrap();
+        let tlvs = parse_frame(frame).unwrap();
         assert_eq!(tlvs.len(), 1);
         assert_eq!(
             "123456789",
@@ -565,10 +536,7 @@ mod tests {
             \xfe\x0c\xe0\x27\x1a\x01\x02\x06OUIOUI";
         let mut dsp = Dispatcher::new();
         //collect our two tlvs, and do stuff with them
-        let tlvs = parse_frame(frame)
-            .into_iter()
-            .collect::<Result<Vec<TLV>, _>>()
-            .unwrap();
+        let tlvs = parse_frame(frame).unwrap();
         assert_eq!(
             "123456789",
             dsp.parse_tlv(&tlvs[0]).1.unwrap().into_string().unwrap()
