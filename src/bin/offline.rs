@@ -43,18 +43,25 @@ fn parse_captured<T: pcap::Activated>(mut _capture: pcap::Capture<T>) {
         let cap = _capture.next();
         match cap {
             Ok(data) => {
-                if data.get(12..14).unwrap() == [136, 204] {
-                    // check LLDP type
-                    let mut dispatcher = Dispatcher::new();
-                    let frame_info = dispatcher.parse(data.get(14..).unwrap());
+                let ptype = data.get(12..14); // check LLDP type
+                if let Some([136, 204]) = ptype {
+                    let mut dsp = Dispatcher::new();
+                    let tlvs = data.get(14..);
 
-                    match frame_info {
-                        Ok(data) => println!("number of tlvs: {}", data.tlvs.len()),
-                        Err(err) => {
-                            println!("{}", err);
+                    if let Some(tlvs) = tlvs {
+                        let frame_info = dsp.parse(tlvs);
+
+                        match frame_info {
+                            Ok(data) => {
+                                println!("Ok tlvs: {}", data);
+                            }
+                            Err(err) => {
+                                println!("Err tlvs: {}", err);
+                            }
                         }
                     }
                 }
+                println!("");
             }
             Err(err) => break,
         }

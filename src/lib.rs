@@ -125,5 +125,18 @@ pub struct FrameInfo<'a> {
     pub lints: Vec<LintEntry>,
 }
 
+impl fmt::Display for FrameInfo<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "tlvs: {:?}, info: {:?}, errors: {:?}",
+            self.tlvs, self.info, self.errors,
+        );
+        Ok(for i in &self.lints {
+            write!(f, "lints: {}", i);
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {}
