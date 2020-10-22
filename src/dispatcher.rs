@@ -138,7 +138,7 @@ pub struct InvalidFrame<'a> {
     pub pointer: &'a [u8],
 }
 
-impl fmt::Display for InvalidFrame<'_>{
+impl fmt::Display for InvalidFrame<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.tlvs)
     }

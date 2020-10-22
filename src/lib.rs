@@ -54,6 +54,7 @@ pub enum ParsingError<'a> {
 }
 
 /// A lint entry associated with a frame
+#[derive(Debug)]
 pub struct LintEntry {
     /// [Lint] type
     pub lint: Lint,
@@ -129,12 +130,16 @@ impl fmt::Display for FrameInfo<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "tlvs: {:?}, info: {:?}, errors: {:?}",
+            "tlvs: {:?}\n info: {:?}\n errors: {:?}\n\n",
             self.tlvs, self.info, self.errors,
-        );
-        Ok(for i in &self.lints {
-            write!(f, "lints: {}", i);
-        })
+        )?;
+        if !&self.lints.is_empty() {
+            write!(f, "lints: ")?;
+            for i in &self.lints {
+                write!(f, "{}, ", i)?;
+            }
+        }
+        Ok(())
     }
 }
 

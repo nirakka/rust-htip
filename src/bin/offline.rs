@@ -3,11 +3,10 @@ use rust_htip;
 use rust_htip::Dispatcher;
 
 use std::env;
-use std::error::Error;
 
 //Accepts a number of file names
-fn main() -> Result<(), Box<dyn Error>> {
-    let args: Vec<String> = env::args().collect();
+fn main() {
+    let args: Vec<String> = env::args().skip(1).collect();
 
     for arg in args {
         print!("opening file {} ...", arg);
@@ -19,51 +18,32 @@ fn main() -> Result<(), Box<dyn Error>> {
             Err(err) => println!("FAILED! error: {}", err),
         }
     }
-
-    Ok(())
 }
 
-//this can be used for both a file and a
-//live capture...
-//
-//you will probably have to use functions such as next & filter
-//and break the iteration when there are no more packets.
-//
-//if the packet is HTIP (Q: how can we tell if it is?)
-//  then pass it to rust_htip::dispatcher::Dispatcher::parse_frame()
-//
-//for the time being, try to "print" the packet information
-//(implement display for lib.rs::FrameInfo and all other
-//necessary structures)
-//
-//See the documentation here:
-//https://docs.rs/pcap/0.7.0/pcap/struct.Capture.html
-fn parse_captured<T: pcap::Activated>(mut _capture: pcap::Capture<T>) {
+fn parse_captured<T: pcap::Activated>(mut capture: pcap::Capture<T>) {
+    //static setup
+    //1. setup our filter (broadcast + lldp)
+    capture
+        .filter("ether broadcast && ether proto 0x88cc")
+        .expect("pcap: unable to set filter");
+    //2. get a dispatcher instance
+    let mut dispatcher = Dispatcher::new();
+
     loop {
-        let cap = _capture.next();
-        match cap {
+        let cap_data = capture.next();
+        match cap_data {
             Ok(data) => {
-                let ptype = data.get(12..14); // check LLDP type
-                if let Some([136, 204]) = ptype {
-                    let mut dsp = Dispatcher::new();
-                    let tlvs = data.get(14..);
-
-                    if let Some(tlvs) = tlvs {
-                        let frame_info = dsp.parse(tlvs);
-
-                        match frame_info {
-                            Ok(data) => {
-                                println!("Ok tlvs: {}", data);
-                            }
-                            Err(err) => {
-                                println!("Err tlvs: {}", err);
-                            }
-                        }
+                //strip the ethernet header (14 bytes)
+                if let Some(htip_frame) = data.get(14..) {
+                    let parse_result = dispatcher.parse(htip_frame);
+                    match parse_result {
+                        Ok(data) => println!("{}\n", data),
+                        Err(_err) => println!("skipping bad frame..\n"),
                     }
                 }
-                println!("");
             }
-            Err(err) => break,
+            //if calling next() causes an error (e.g. no more data), we bail
+            Err(_) => break,
         }
     }
 }
