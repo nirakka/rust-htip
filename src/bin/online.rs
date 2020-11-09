@@ -1,6 +1,8 @@
 use pcap::Device;
 use std::env;
 
+mod common;
+
 fn main() -> Result<(), pcap::Error> {
     let args: Vec<String> = env::args().collect();
 
@@ -8,7 +10,7 @@ fn main() -> Result<(), pcap::Error> {
     if args.len() != 2 { 
         let device = Device::lookup()?;
         match pcap::Capture::from_device(device)?.open() {
-            Ok(cap) => rust_htip::parse_captured(cap),
+            Ok(cap) => common::parse_captured(cap),
             Err(_err) => eprintln!(
                 "device open error, requires root privilege\n\
                 Usage: sudo {}\nerror: {}",
@@ -24,7 +26,7 @@ fn main() -> Result<(), pcap::Error> {
     //explicitly specified network interface in args[1]
     } else {
         match pcap::Capture::from_device(args[1].as_str())?.open() {
-            Ok(cap) => rust_htip::parse_captured(cap),
+            Ok(cap) => common::parse_captured(cap),
             Err(err) => eprintln!(
                 "device open error: {}\n\
                 error: {}",

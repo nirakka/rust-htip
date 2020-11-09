@@ -144,6 +144,17 @@ impl fmt::Display for InvalidFrame<'_> {
     }
 }
 
+impl<'a> InvalidFrame<'a> {
+    pub fn parse(self, dispatcher: &mut Dispatcher) -> FrameInfo<'a> {
+        let mut fi = dispatcher.parse_tlvs(self.tlvs);
+        fi.errors.push((
+            TlvKey::new(0, vec![]),
+            ParsingError::InvalidFrame(self.pointer),
+        ));
+        fi
+    }
+}
+
 pub struct Dispatcher<'a> {
     parsers: Storage<ParserKey, TLV<'a>, Box<dyn Parser>>,
     linters: Vec<Box<dyn Linter>>,
@@ -270,7 +281,10 @@ impl Dispatcher<'_> {
     /// ```
     pub fn parse<'a>(&mut self, frame: &'a [u8]) -> Result<FrameInfo<'a>, InvalidFrame<'a>> {
         let tlvs = parse_frame(frame)?;
+        Ok(self.parse_tlvs(tlvs))
+    }
 
+    fn parse_tlvs<'a>(&mut self, tlvs: Vec<TLV<'a>>) -> FrameInfo<'a> {
         //everything's fine, keep on parsing/linting
         let mut lints = vec![];
         let (info, errors) = tlvs
@@ -290,12 +304,12 @@ impl Dispatcher<'_> {
             .collect::<Vec<_>>();
 
         lints.append(&mut self.lint(&info));
-        Ok(FrameInfo {
+        FrameInfo {
             tlvs,
             info,
             errors,
             lints,
-        })
+        }
     }
 
     /// Create a new Dispatcher instance

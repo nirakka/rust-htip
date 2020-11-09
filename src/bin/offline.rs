@@ -1,7 +1,5 @@
-use pcap;
-use rust_htip;
-
 use std::env;
+mod common;
 
 //Accepts a number of file names
 fn main() {
@@ -12,7 +10,7 @@ fn main() {
         match pcap::Capture::from_file(arg) {
             Ok(capture) => {
                 println!("OK");
-                rust_htip::parse_captured(capture);
+                common::parse_captured(capture);
             }
             Err(err) => println!("FAILED! error: {}", err),
         }
