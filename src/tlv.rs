@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TlvType {
     End,
@@ -88,6 +90,15 @@ impl<'a> TLV<'a> {
 
     pub fn is_empty(&self) -> bool {
         self.value.is_empty()
+    }
+}
+
+impl fmt::Display for TLV<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.value.iter()
+            .map(|x| format!("\\x{:02x}", x))
+            .collect::<String>();
+        write!(f, "type: {:?}, length: {}, value:{}", self.ttype, self.length, bytes)
     }
 }
 #[cfg(debug)]

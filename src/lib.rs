@@ -155,10 +155,15 @@ pub struct FrameInfo<'a> {
 
 impl fmt::Display for FrameInfo<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        //concatenate all the tlvs into a string
+        let tlv_string = self.tlvs.iter()
+            .map(|tlv| tlv.to_string())
+            .collect::<Vec<String>>()
+            .join("\n");
         write!(
             f,
-            "tlvs: {:?}\n info: {:?}\n errors: {:?}\n\n",
-            self.tlvs, self.info, self.errors,
+            "TLVs: {}\n\nInfo: {:?}\nErrors: {:?}\n\n",
+            tlv_string, self.info, self.errors,
         )?;
         if !&self.lints.is_empty() {
             write!(f, "lints: ")?;

@@ -57,7 +57,7 @@ impl fmt::Display for ParserKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "T0x{:x}P{}",
+            "Type:0x{:x} Prefix:0x{}",
             self.tlv_type,
             self.prefix
                 .iter()
@@ -308,6 +308,12 @@ impl Dispatcher<'_> {
             TlvType::from(3u8),
             b"".to_vec(),
             Box::new(Number::new(NumberSize::Two)),
+        );
+        instance.add_parser(
+            TlvType::from(4u8),
+            b"".to_vec(),
+            //max sized text.. no formatting no nothing
+            Box::new(Text::new(255)),
         );
         //this is "whatever stated in the first byte (maximum length 255)"
         instance.add_htip_parser(b"\x01\x01".to_vec(), Box::new(SizedText::new(255)));
