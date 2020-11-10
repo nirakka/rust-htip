@@ -7,7 +7,7 @@ fn main() -> Result<(), pcap::Error> {
     let args: Vec<String> = env::args().collect();
 
     //we don't have a specified network interface
-    if args.len() != 2 { 
+    if args.len() != 2 {
         let device = Device::lookup()?;
         match pcap::Capture::from_device(device)?.open() {
             Ok(cap) => common::parse_captured(cap),
@@ -22,7 +22,8 @@ fn main() -> Result<(), pcap::Error> {
     } else if args[1] == "--help" {
         println!(
             "USAGE: sudo ./target/debug/online [interface_name]\n\
-            if interface_name is empty the first available interface will be used.");
+            if interface_name is empty the first available interface will be used."
+        );
     //explicitly specified network interface in args[1]
     } else {
         match pcap::Capture::from_device(args[1].as_str())?.open() {
@@ -30,7 +31,8 @@ fn main() -> Result<(), pcap::Error> {
             Err(err) => eprintln!(
                 "device open error: {}\n\
                 error: {}",
-                &args[1], err),
+                &args[1], err
+            ),
         }
     }
     Ok(())

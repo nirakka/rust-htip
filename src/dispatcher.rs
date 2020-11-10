@@ -3,6 +3,7 @@ use crate::linters::*;
 use crate::parsers::*;
 use crate::subkeys::*;
 use crate::*;
+use serde::Serialize;
 use std::cmp::Ordering;
 use std::fmt;
 
@@ -11,12 +12,13 @@ const TTC_OUI: &[u8; 3] = b"\xe0\x27\x1a";
 /// Unique combination of a tlv type and a binary prefix. If a TLV
 /// `matches` a parser key, the registered parser (if any) for that
 /// key will be invoked.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash, Serialize)]
 pub struct ParserKey {
     /// type of tlv
     pub tlv_type: u8,
     /// binary prefix that matches the begining of the contents of
     /// the tlv
+    #[serde(serialize_with = "serialize_hex")]
     pub prefix: Vec<u8>,
 }
 

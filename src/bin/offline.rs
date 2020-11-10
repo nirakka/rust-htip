@@ -6,13 +6,13 @@ fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
 
     for arg in args {
-        print!("opening file {} ...", arg);
+        eprint!("opening file {} ...", arg);
         match pcap::Capture::from_file(arg) {
             Ok(capture) => {
-                println!("OK");
+                eprintln!("OK");
                 common::parse_captured(capture);
             }
-            Err(err) => println!("FAILED! error: {}", err),
+            Err(err) => eprintln!("FAILED! error: {}", err),
         }
     }
 }

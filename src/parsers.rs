@@ -1,7 +1,7 @@
+use macaddr::MacAddr6;
+use serde::{Serialize, Serializer};
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
-
-use macaddr::MacAddr6;
 
 use super::ParsingError;
 
@@ -30,7 +30,7 @@ impl<'a> Context<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 ///An enum holding the various possible types of HTIP data.
 pub enum ParseData {
     ///Represents a number of up to 4 bytes, as well as percentages.
@@ -42,11 +42,15 @@ pub enum ParseData {
     ///Represents various binary data
     Binary(Vec<u8>),
     ///Represents a list of mac addresses
+    #[serde(serialize_with = "serialize_macs")]
     Mac(Vec<MacAddr6>),
     ///Subtype 2
     Connections(PerPortInfo),
     ///typed data
-    TypedData(u8, Vec<u8>),
+    TypedData(
+        u8,
+        #[serde(serialize_with = "crate::serialize_hex")] Vec<u8>,
+    ),
     ///No data (end tlv)
     Null,
 }
@@ -141,6 +145,13 @@ impl ParseData {
     pub fn into_mac(self) -> Option<Vec<MacAddr6>> {
         self.try_into().ok()
     }
+}
+
+fn serialize_macs<S>(data: &Vec<MacAddr6>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.collect_seq(data.iter().map(|mac| format!("{}", mac)))
 }
 
 ///use with the fixed-size number parser
@@ -490,10 +501,11 @@ impl Parser for Mac {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PerPortInfo {
     pub interface: u32,
     pub port: u32,
+    #[serde(serialize_with = "serialize_macs")]
     pub macs: Vec<MacAddr6>,
 }
 

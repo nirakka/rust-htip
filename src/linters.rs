@@ -1,4 +1,5 @@
 use lazy_static::lazy_static;
+use serde::Serialize;
 
 use crate::{InfoEntry, LintEntry, ParseData, TlvKey};
 use std::collections::HashMap;
@@ -26,7 +27,7 @@ lazy_static! {
 static NODESC: &str = "No Description";
 
 /// Type of a lint
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug, Serialize)]
 pub enum Lint {
     /// A warning; althoug irregular it can still be used
     Warning(u8),

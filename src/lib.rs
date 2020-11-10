@@ -15,7 +15,7 @@
 #![deny(broken_intra_doc_links)]
 //TODO figure out proper visibilities
 /// Organize parsers & linters into a single unit
-pub mod dispatcher;
+mod dispatcher;
 /// A collection of linters that check the contents of parsed information
 /// for irregularities
 mod linters;
@@ -32,9 +32,10 @@ pub use linters::Lint;
 pub use parsers::ParseData;
 pub use tlv::{TlvType, TLV};
 
+use serde::{Serialize, Serializer};
 use std::fmt;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 ///These are the errors that a basic parser may produce.
 ///The slice represents the original data that caused
 ///the error.
@@ -44,25 +45,30 @@ pub enum ParsingError<'a> {
     ///The actual length is different from what is expected
     UnexpectedLength(usize),
     ///A sequence of bytes is different from what it was expected
-    NotEqual(&'a [u8]),
+    NotEqual(#[serde(serialize_with = "serialize_hex")] &'a [u8]),
     ///An invalid percentage, outside the range of [0-100]
     InvalidPercentage(u8),
     ///The text is not valid utf8
-    InvalidText(std::str::Utf8Error),
+    InvalidText(
+        //TODO serialize this too..
+        #[serde(skip_serializing)] std::str::Utf8Error,
+    ),
     ///Unknown type/subtype
     Unknown,
     ///Invalid Frame
-    InvalidFrame(&'a [u8]),
+    InvalidFrame(#[serde(serialize_with = "serialize_hex")] &'a [u8]),
 }
 
 /// A lint entry associated with a frame
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct LintEntry {
     /// [Lint] type
     pub lint: Lint,
     /// Related tlv & prefix
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tlv_key: Option<TlvKey>,
     /// Any additional info, used to customize error message
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub extra_info: Option<String>,
 }
 
@@ -117,6 +123,7 @@ pub type ErrorEntry<'a> = (TlvKey, ParsingError<'a>);
 
 /// A structure holding all the relevant information for a
 /// parsed HTIP frame.
+#[derive(Serialize)]
 pub struct FrameInfo<'a> {
     /// A vector with all the TLVs
     pub tlvs: Vec<TLV<'a>>,
@@ -150,6 +157,17 @@ impl fmt::Display for FrameInfo<'_> {
         }
         Ok(())
     }
+}
+
+pub(crate) fn serialize_hex<S>(data: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let data_string = data
+        .iter()
+        .map(|c| format!("{:02X}", c))
+        .collect::<String>();
+    serializer.serialize_str(&data_string)
 }
 
 #[cfg(test)]

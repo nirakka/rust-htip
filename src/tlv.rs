@@ -1,6 +1,7 @@
+use serde::Serialize;
 use std::fmt;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
 pub enum TlvType {
     End,
     ChassisID,
@@ -60,10 +61,12 @@ impl From<TlvType> for u8 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct TLV<'a> {
+    #[serde(rename = "type")]
     ttype: TlvType,
     length: usize,
+    #[serde(serialize_with = "crate::serialize_hex")]
     value: &'a [u8],
 }
 

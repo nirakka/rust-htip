@@ -17,7 +17,7 @@ pub fn parse_captured<T: pcap::Activated>(mut capture: pcap::Capture<T>) {
                 if let Some(htip_frame) = data.get(14..) {
                     let parse_result = dispatcher.parse(htip_frame);
                     match parse_result {
-                        Ok(data) => println!("{}\n", data),
+                        Ok(data) => println!("{}\n", serde_json::to_string_pretty(&data).unwrap()),
                         Err(err) => handle_bad_frame(err, &mut dispatcher),
                     }
                 }
@@ -31,5 +31,5 @@ pub fn parse_captured<T: pcap::Activated>(mut capture: pcap::Capture<T>) {
 fn handle_bad_frame(frame: InvalidFrame, dispatcher: &mut Dispatcher) {
     println!("BAD FRAME! possibly incorrect parse results!\n");
     let stuff = frame.parse(dispatcher);
-    println!("{}\n", stuff);
+    println!("{}\n", serde_json::to_string_pretty(&stuff).unwrap());
 }

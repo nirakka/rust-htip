@@ -1,12 +1,15 @@
 [package]
 name = "rust-htip"
 version = "0.1.0"
-authors = ["marios <haha@myzen.jaist.ac.jp>"]
+authors = ["marios <haha@myzen.jaist.ac.jp>", "Shota Aoki <ikoa.syo@gmail.com>"]
 edition = "2018"
+description = "An HTIP parsing library that reports errors and lint warnings"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 macaddr = "1.0"
-lazy_static = "1.4.0"
+lazy_static = "1.4"
 pcap = "0.7"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
