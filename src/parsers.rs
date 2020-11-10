@@ -5,14 +5,14 @@ use macaddr::MacAddr6;
 
 use super::ParsingError;
 
-pub (crate) trait Parser {
+pub(crate) trait Parser {
     fn parse<'a, 's>(
         &mut self,
         context: &'a mut Context<'s>,
     ) -> Result<ParseData, ParsingError<'s>>;
 }
 
-pub (crate) struct Context<'a> {
+pub(crate) struct Context<'a> {
     data: &'a [u8],
 }
 
@@ -157,7 +157,7 @@ pub enum NumberSize {
 }
 
 ///A parser for numbers that declare their sizes, with a known max size in bytes.
-pub (crate) struct SizedNumber {
+pub(crate) struct SizedNumber {
     size: NumberSize,
 }
 
@@ -224,7 +224,7 @@ impl Parser for SizedNumber {
 }
 
 ///A fake parser used in testing
-pub (crate) struct Dummy(pub u32);
+pub(crate) struct Dummy(pub u32);
 
 impl Parser for Dummy {
     fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
@@ -233,7 +233,7 @@ impl Parser for Dummy {
     }
 }
 
-pub (crate) struct AnyBinary;
+pub(crate) struct AnyBinary;
 
 impl Parser for AnyBinary {
     fn parse<'a, 's>(&mut self, ctx: &'a mut Context<'s>) -> Result<ParseData, ParsingError<'s>> {
@@ -243,7 +243,7 @@ impl Parser for AnyBinary {
     }
 }
 
-pub (crate) struct FixedSequence {
+pub(crate) struct FixedSequence {
     key: Vec<u8>,
 }
 
@@ -272,7 +272,7 @@ impl Parser for FixedSequence {
     }
 }
 
-pub (crate) struct Text {
+pub(crate) struct Text {
     max_size: usize,
 }
 
@@ -308,7 +308,7 @@ impl Parser for Text {
     }
 }
 
-pub (crate) struct SizedText {
+pub(crate) struct SizedText {
     max_size: usize,
 }
 
@@ -364,7 +364,7 @@ impl Parser for SizedText {
     }
 }
 
-pub (crate) struct ExactlySizedText {
+pub(crate) struct ExactlySizedText {
     inner: SizedText,
     exact_size: usize,
 }
@@ -390,7 +390,7 @@ impl Parser for ExactlySizedText {
     }
 }
 
-pub (crate) struct Percentage;
+pub(crate) struct Percentage;
 
 impl Percentage {
     pub fn new() -> Self {
@@ -420,7 +420,7 @@ impl Parser for Percentage {
     }
 }
 
-pub (crate) struct CompositeParser {
+pub(crate) struct CompositeParser {
     parts: Vec<Box<dyn Parser>>,
 }
 
@@ -446,7 +446,7 @@ impl CompositeParser {
     }
 }
 
-pub (crate) struct CompositeParserComplete {
+pub(crate) struct CompositeParserComplete {
     parts: Vec<Box<dyn Parser>>,
     data: Vec<ParseData>,
     func: Box<dyn Fn(&mut Vec<ParseData>) -> ParseData>,
@@ -461,7 +461,7 @@ impl Parser for CompositeParserComplete {
     }
 }
 
-pub (crate) struct Mac;
+pub(crate) struct Mac;
 
 impl Mac {
     pub fn new() -> Self {

@@ -44,7 +44,7 @@ impl fmt::Display for Lint {
 }
 
 /// Checks for abnormal content in parsed information
-pub (crate) trait Linter {
+pub(crate) trait Linter {
     /// Check the supplied info entries for abnormal content
     /// # Arguments
     ///
@@ -54,7 +54,7 @@ pub (crate) trait Linter {
 }
 
 /// Linter that checks if an End TLV is present
-pub (crate) struct CheckEndTlv;
+pub(crate) struct CheckEndTlv;
 
 impl Linter for CheckEndTlv {
     fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {
@@ -74,7 +74,7 @@ impl Linter for CheckEndTlv {
 }
 
 ///Linter that checks for the presence of invalid characters in various TLVs
-pub (crate) struct InvalidChars {
+pub(crate) struct InvalidChars {
     allowed: HashMap<TlvKey, String>,
 }
 
@@ -154,7 +154,7 @@ impl Linter for InvalidChars {
 /// Lookup page 27 in jj-300.00.v3.pdf
 ///
 /// Don't forget to set the lint entry key to TlvKey::new(1, vec![])
-pub (crate) struct TLV1Linter;
+pub(crate) struct TLV1Linter;
 
 impl Linter for TLV1Linter {
     fn lint(&self, info: &[InfoEntry]) -> Vec<LintEntry> {

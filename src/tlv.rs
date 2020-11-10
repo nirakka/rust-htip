@@ -95,10 +95,16 @@ impl<'a> TLV<'a> {
 
 impl fmt::Display for TLV<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let bytes = self.value.iter()
+        let bytes = self
+            .value
+            .iter()
             .map(|x| format!("\\x{:02x}", x))
             .collect::<String>();
-        write!(f, "type: {:?}, length: {}, value:{}", self.ttype, self.length, bytes)
+        write!(
+            f,
+            "type: {:?}, length: {}, value:{}",
+            self.ttype, self.length, bytes
+        )
     }
 }
 #[cfg(debug)]
